@@ -16,7 +16,9 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from .obsidian_exporter import ExportConfig, ObsidianExporter
+from .core import export_tasks_internal
+from .obsidian_exporter import ExportConfig
+from .scheduler import ScheduledSync
 from .todoist_client import TodoistAPIError, TodoistClient
 
 # Load environment variables from .env file
@@ -189,29 +191,6 @@ def export(
         # Initialize client
         client = TodoistClient(api_token)
 
-        # Get projects
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            progress.add_task("Fetching projects...", total=None)
-            projects = client.get_projects()
-            projects_dict = {p.id: p for p in projects}
-
-        # Filter by project if specified
-        target_project_id = project_id
-        if project_name and not project_id:
-            matching_projects = [
-                p for p in projects if p.name.lower() == project_name.lower()
-            ]
-            if not matching_projects:
-                console.print(f"[red]Error:[/red] Project '{project_name}' not found.")
-                available = ", ".join([p.name for p in projects])
-                console.print(f"Available projects: {available}")
-                sys.exit(1)
-            target_project_id = matching_projects[0].id
-
         # Configure exporter
         config = ExportConfig(
             output_dir=output_dir,
@@ -220,73 +199,28 @@ def export(
             include_comments=not no_comments,
             tag_prefix=tag_prefix,
         )
-        exporter = ObsidianExporter(config)
 
-        # Get tasks
+        # Use the core export function
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            progress.add_task("Fetching tasks...", total=None)
-            tasks = client.get_tasks(project_id=target_project_id, filter_expr=filter)
+            progress.add_task("Exporting tasks...", total=None)
 
-        if not tasks:
-            console.print("No tasks found matching the specified criteria.")
-            return
-
-        console.print(f"Found {len(tasks)} tasks to export.")
-
-        # Export tasks
-        exported_counts = {}
-        total_exported = 0
-
-        with Progress(console=console) as progress:
-            export_task = progress.add_task("Exporting tasks...", total=len(tasks))
-
-            for task in tasks:
-                project = projects_dict.get(task.project_id)
-                if not project:
-                    console.print(
-                        f"[yellow]Warning:[/yellow] Project not found for "
-                        f"task: {task.content}"
-                    )
-                    progress.advance(export_task)
-                    continue
-
-                # Get comments if enabled
-                comments = None
-                if config.include_comments and task.comment_count > 0:
-                    try:
-                        comments = client.get_task_comments(task.id)
-                    except TodoistAPIError as e:
-                        console.print(
-                            f"[yellow]Warning:[/yellow] Failed to get comments "
-                            f"for task '{task.content}': {e}"
-                        )
-
-                # Export task
-                try:
-                    exporter.export_task(task, project, comments)
-
-                    # Update counts
-                    if project.id not in exported_counts:
-                        exported_counts[project.id] = 0
-                    exported_counts[project.id] += 1
-                    total_exported += 1
-
-                except Exception as e:
-                    console.print(
-                        f"[red]Error exporting task '{task.content}':[/red] {e}"
-                    )
-
-                progress.advance(export_task)
+            total_exported = export_tasks_internal(
+                client=client,
+                export_config=config,
+                project_id=project_id,
+                project_name=project_name,
+                filter_expr=filter,
+                include_completed=include_completed,
+            )
 
         # Show summary
         summary = Panel.fit(
             f"[green]✅ Export completed successfully![/green]\n\n"
             f"Exported: {total_exported} tasks\n"
-            f"Projects: {len(exported_counts)}\n"
             f"Output directory: {output_dir.absolute()}\n\n"
             f"Included completed tasks: "
             f"{'Yes' if include_completed else 'No'}\n"
@@ -297,6 +231,8 @@ def export(
             border_style="green",
         )
         console.print(summary)
+
+        return total_exported
 
     except TodoistAPIError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -348,6 +284,129 @@ TODOIST_API_TOKEN=your_token_here
     console.print("2. Get your token from: https://todoist.com/prefs/integrations")
     console.print("3. Run 'todoist-to-notes test' to verify your setup")
     console.print("4. Run 'todoist-to-notes export' to start exporting your tasks")
+
+
+@cli.command()
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path.cwd() / "obsidian_export",
+    help="Output directory for exported notes",
+)
+@click.option(
+    "--api-token",
+    "-t",
+    envvar="TODOIST_API_TOKEN",
+    help="Todoist API token (or set TODOIST_API_TOKEN env var)",
+)
+@click.option("--project-id", "-p", help="Export only tasks from specific project ID")
+@click.option("--project-name", help="Export only tasks from specific project name")
+@click.option(
+    "--include-completed", "-c", is_flag=True, help="Include completed tasks in export"
+)
+@click.option("--no-comments", is_flag=True, help="Skip exporting task comments")
+@click.option(
+    "--no-project-folders",
+    is_flag=True,
+    help="Don't create separate folders for each project",
+)
+@click.option(
+    "--tag-prefix",
+    default="todoist",
+    help="Prefix for generated tags (default: todoist)",
+)
+@click.option(
+    "--filter",
+    "-f",
+    help="Todoist filter expression (e.g., 'today', 'overdue', '@urgent')",
+)
+@click.option(
+    "--interval",
+    type=int,
+    default=15,
+    help="Sync interval in minutes (default: 15)",
+)
+@click.option(
+    "--time",
+    "sync_time",
+    help="Daily sync time in HH:MM format (e.g., '09:00')",
+)
+@click.option(
+    "--once",
+    is_flag=True,
+    help="Run sync once immediately and exit",
+)
+@click.option(
+    "--no-status",
+    is_flag=True,
+    help="Don't show live status display",
+)
+def schedule(
+    output_dir: Path,
+    api_token: str | None,
+    project_id: str | None,
+    project_name: str | None,
+    include_completed: bool,
+    no_comments: bool,
+    no_project_folders: bool,
+    tag_prefix: str,
+    filter: str | None,
+    interval: int,
+    sync_time: str | None,
+    once: bool,
+    no_status: bool,
+):
+    """Run scheduled sync of Todoist tasks to Obsidian notes."""
+    if not api_token:
+        console.print(
+            "[red]Error:[/red] Todoist API token is required. "
+            "Set TODOIST_API_TOKEN environment variable or use "
+            "--api-token option."
+        )
+        sys.exit(1)
+
+    # Configure export
+    config = ExportConfig(
+        output_dir=output_dir,
+        create_project_folders=not no_project_folders,
+        include_completed=include_completed,
+        include_comments=not no_comments,
+        tag_prefix=tag_prefix,
+    )
+
+    # Initialize scheduled sync
+    try:
+        sync = ScheduledSync(
+            api_token=api_token,
+            export_config=config,
+            project_id=project_id,
+            project_name=project_name,
+            filter_expr=filter,
+            include_completed=include_completed,
+        )
+
+        if once:
+            # Run once and exit
+            success = sync.run_once_now()
+            sys.exit(0 if success else 1)
+
+        # Setup schedule
+        if sync_time:
+            sync.run_at(sync_time)
+            console.print(f"[green]📅 Scheduled daily sync at {sync_time}[/green]")
+        else:
+            sync.run_every(interval, "minutes")
+            console.print(f"[green]⏰ Scheduled sync every {interval} minutes[/green]")
+
+        # Start the scheduler
+        sync.start(show_status=not no_status)
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if logging.getLogger().level == logging.DEBUG:
+            console.print_exception()
+        sys.exit(1)
 
 
 def main():

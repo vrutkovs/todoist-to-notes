@@ -25,6 +25,7 @@ help:
 	@echo "  cli-test       - Test CLI connection"
 	@echo "  cli-projects   - List Todoist projects"
 	@echo "  cli-export     - Run example export"
+	@echo "  cli-schedule   - Test scheduling functionality"
 
 # Setup targets
 setup: install-dev init pre-commit
@@ -104,6 +105,10 @@ cli-projects:
 cli-export:
 	@echo "Running example export to ./example_output/"
 	uv run todoist-to-notes export --output-dir ./example_output --tag-prefix "example"
+
+cli-schedule:
+	@echo "Testing schedule functionality (run once)..."
+	uv run todoist-to-notes schedule --once --output-dir ./example_output --tag-prefix "scheduled"
 
 # Development helpers
 dev-server:

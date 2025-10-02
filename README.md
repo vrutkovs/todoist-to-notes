@@ -99,18 +99,27 @@ todoist-to-notes export --filter "today | overdue"
 ## Basic Usage
 
 ```bash
-# Export all tasks
+# Export all tasks once
 todoist-to-notes export
 
 # Export with custom options
 todoist-to-notes export --filter "today" --include-completed
+
+# Schedule automatic sync every 15 minutes
+todoist-to-notes schedule
+
+# Schedule daily sync at 9:00 AM
+todoist-to-notes schedule --time "09:00"
+
+# Run sync once and exit
+todoist-to-notes schedule --once
 ```
 
 ## Command Reference
 
 ### `todoist-to-notes export`
 
-Export Todoist tasks as Obsidian markdown notes.
+Export Todoist tasks as Obsidian markdown notes (one-time export).
 
 **Options:**
 
@@ -124,31 +133,48 @@ Export Todoist tasks as Obsidian markdown notes.
 - `--tag-prefix TEXT` - Prefix for generated tags (default: `todoist`)
 - `-f, --filter TEXT` - Todoist filter expression
 
+### `todoist-to-notes schedule`
+
+Run scheduled sync of Todoist tasks to Obsidian notes.
+
+**Options:**
+
+All export options plus:
+
+- `--interval INTEGER` - Sync interval in minutes (default: 15)
+- `--time TEXT` - Daily sync time in HH:MM format (e.g., '09:00')
+- `--once` - Run sync once immediately and exit
+- `--no-status` - Don't show live status display
+
+**Examples:**
+
+```bash
+# Schedule sync every 30 minutes
+todoist-to-notes schedule --interval 30
+
+# Schedule daily sync at 8:30 AM
+todoist-to-notes schedule --time "08:30"
+
+# Schedule with filters and custom output
+todoist-to-notes schedule --filter "today | overdue" --output-dir ~/vault/tasks/
+
+# Run once with scheduling options
+todoist-to-notes schedule --once --project-name "Work"
+```
+
 
 
 ### `todoist-to-notes test`
 
 Test connection to Todoist API.
 
-```bash
-todoist-to-notes test
-```
-
 ### `todoist-to-notes list-projects`
 
 List all projects in your Todoist account.
 
-```bash
-todoist-to-notes list-projects
-```
-
 ### `todoist-to-notes init`
 
-Initialize configuration by creating a `.env` file template.
-
-```bash
-todoist-to-notes init
-```
+Initialize configuration by creating a .env file template.
 
 ## Output Structure
 
@@ -166,14 +192,34 @@ obsidian_export/
     └── Random_idea_345.md
 ```
 
-### Without Project Folders
+## Scheduling Features
 
+### Automatic Sync
+The scheduler runs continuously and syncs your tasks at specified intervals:
+
+- **Interval-based**: Sync every N minutes/hours
+- **Time-based**: Sync daily at a specific time
+- **Live status**: Real-time display of sync status and next run time
+- **Graceful shutdown**: Ctrl+C for clean exit
+
+### Use Cases
+
+**Continuous Integration:**
+```bash
+# Keep Obsidian vault in sync every 15 minutes
+todoist-to-notes schedule --interval 15 --output-dir ~/obsidian-vault/todoist/
 ```
-obsidian_export/
-├── Buy_groceries_123.md
-├── Call_dentist_456.md
-├── Finish_report_789.md
-└── Team_meeting_prep_012.md
+
+**Daily Planning:**
+```bash
+# Sync today's tasks every morning at 8:00 AM
+todoist-to-notes schedule --time "08:00" --filter "today"
+```
+
+**Project Monitoring:**
+```bash
+# Monitor specific project every 5 minutes
+todoist-to-notes schedule --interval 5 --project-name "Important Project"
 ```
 
 ## Note Format
@@ -242,7 +288,7 @@ EXPORT_TAG_PREFIX=todoist
 
 ### Todoist Filters
 
-You can use any Todoist filter expression with the `--filter` option:
+You can use any Todoist filter expression with both `export` and `schedule` commands:
 
 - `today` - Today's tasks
 - `overdue` - Overdue tasks
@@ -256,6 +302,16 @@ You can use any Todoist filter expression with the `--filter` option:
 Combine filters with `&` (AND) and `|` (OR):
 - `today | overdue` - Today's or overdue tasks
 - `p1 & #Work` - High priority tasks in Work project
+
+### Scheduling with Filters
+
+```bash
+# Keep urgent tasks synced every 5 minutes
+todoist-to-notes schedule --interval 5 --filter "p1 | overdue"
+
+# Daily sync of today's tasks at 7 AM
+todoist-to-notes schedule --time "07:00" --filter "today"
+```
 
 ## Development
 
@@ -292,12 +348,22 @@ make build  # Build package
 - Make sure you have write permissions to the output directory
 - Try a different output directory: `todoist-to-notes export -o ~/Desktop/export/`
 
+**Scheduler not stopping:**
+- Use Ctrl+C to gracefully stop the scheduler
+- If it doesn't respond, use `kill -TERM <pid>` from another terminal
+
+**Scheduler missing syncs:**
+- Check system time and timezone settings
+- Ensure the machine doesn't go to sleep during scheduled times
+- Use interval-based scheduling for more reliable syncing
+
 ### Debug Mode
 
 Run with verbose logging:
 
 ```bash
 todoist-to-notes -v export
+todoist-to-notes -v schedule --interval 1  # Debug scheduling
 ```
 
 ## Contributing

@@ -2,6 +2,7 @@
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -43,6 +44,21 @@ class ObsidianExporter:
         self.output_dir = Path(config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    def extract_link_title(self, text: str) -> str | None:
+        """Extract the title from a markdown link if present.
+
+        Args:
+            text: Text that may contain a markdown link
+
+        Returns:
+            Link title if found, None otherwise
+        """
+        # Match markdown link format [title](url)
+        link_match = re.search(r"\[([^\]]+)\]\([^)]+\)", text)
+        if link_match:
+            return link_match.group(1).strip()
+        return None
+
     def sanitize_filename(self, name: str) -> str:
         """Sanitize a string for use as a filename.
 
@@ -50,10 +66,14 @@ class ObsidianExporter:
             name: The original name
 
         Returns:
-            Sanitized filename
+            Sanitized filename with only ASCII characters
         """
+        # Convert to ASCII, removing non-ASCII characters
+        ascii_name = unicodedata.normalize("NFKD", name)
+        ascii_name = ascii_name.encode("ascii", "ignore").decode("ascii")
+
         # Replace invalid characters with underscores
-        sanitized = re.sub(r'[<>:"/\\|?*]', "_", name)
+        sanitized = re.sub(r'[<>:"/\\|?*]', "_", ascii_name)
         # Remove multiple consecutive underscores
         sanitized = re.sub(r"_+", "_", sanitized)
         # Remove leading/trailing underscores and spaces
@@ -111,8 +131,14 @@ class ObsidianExporter:
         """
         frontmatter = ["---"]
 
+        # Extract link title if present
+        link_title = self.extract_link_title(task.content)
+        display_title = link_title if link_title else task.content
+
         # Basic metadata
-        frontmatter.append(f'title: "{task.content}"')
+        frontmatter.append(f'title: "{display_title}"')
+        if link_title:
+            frontmatter.append(f'original_title: "{task.content}"')
         frontmatter.append(f'todoist_id: "{task.id}"')
         frontmatter.append(f'project: "{project.name}"')
         frontmatter.append(f'project_id: "{project.id}"')
@@ -170,9 +196,11 @@ class ObsidianExporter:
         # Add frontmatter
         content.append(self.format_frontmatter(task, project))
 
-        # Task title
+        # Task title - use link title if available
+        link_title = self.extract_link_title(task.content)
+        display_title = link_title if link_title else task.content
         status_icon = "✅" if task.is_completed else "⬜"
-        content.append(f"# {status_icon} {task.content}")
+        content.append(f"# {status_icon} {display_title}")
         content.append("")
 
         # Task description
@@ -223,8 +251,10 @@ class ObsidianExporter:
         else:
             output_dir = self.output_dir
 
-        # Generate filename from task content
-        filename = self.sanitize_filename(task.content)
+        # Generate filename from task content (use link title if available)
+        link_title = self.extract_link_title(task.content)
+        title_for_filename = link_title if link_title else task.content
+        filename = self.sanitize_filename(title_for_filename)
 
         # Add task ID to avoid conflicts
         filename = f"{filename}_{task.id}"

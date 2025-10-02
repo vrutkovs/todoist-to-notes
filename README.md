@@ -18,8 +18,9 @@ Export your Todoist tasks as beautifully formatted Obsidian-compatible markdown 
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.13 or higher
 - UV package manager (recommended) or pip
+- Pre-commit hooks (automatically installed via `make setup`)
 
 ### Install UV (if not already installed)
 
@@ -32,7 +33,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 #### Option 1: From Source (Development)
 
 ```bash
-git clone https://github.com/username/todoist-to-notes.git
+git clone https://github.com/vrutkovs/todoist-to-notes.git
 cd todoist-to-notes
 uv sync --dev
 ```
@@ -95,40 +96,14 @@ todoist-to-notes export --project-name "Work"
 todoist-to-notes export --filter "today | overdue"
 ```
 
-## Usage Examples
-
-### Export All Tasks with Comments
+## Basic Usage
 
 ```bash
-todoist-to-notes export \
-  --output-dir ~/obsidian-vault/todoist/ \
-  --include-completed \
-  --tag-prefix "task"
-```
+# Export all tasks
+todoist-to-notes export
 
-### Export Today's Tasks Only
-
-```bash
-todoist-to-notes export \
-  --filter "today" \
-  --output-dir ~/obsidian-vault/daily/ \
-  --no-project-folders
-```
-
-### Export Specific Project
-
-```bash
-# By project name
-todoist-to-notes export --project-name "Personal"
-
-# By project ID (get ID with list-projects command)
-todoist-to-notes export --project-id "123456789"
-```
-
-### List All Your Projects
-
-```bash
-todoist-to-notes list-projects
+# Export with custom options
+todoist-to-notes export --filter "today" --include-completed
 ```
 
 ## Command Reference
@@ -149,18 +124,7 @@ Export Todoist tasks as Obsidian markdown notes.
 - `--tag-prefix TEXT` - Prefix for generated tags (default: `todoist`)
 - `-f, --filter TEXT` - Todoist filter expression
 
-**Examples:**
 
-```bash
-# Export everything to default location
-todoist-to-notes export
-
-# Export with custom settings
-todoist-to-notes export -o ~/vault/tasks --include-completed --tag-prefix "todo"
-
-# Export using filter
-todoist-to-notes export -f "p1 | p2" --no-project-folders
-```
 
 ### `todoist-to-notes test`
 
@@ -192,17 +156,13 @@ todoist-to-notes init
 
 ```
 obsidian_export/
-├── Todoist_Export_Index.md          # Master index
 ├── Personal/
-│   ├── README.md                     # Project index
 │   ├── Buy_groceries_123.md
 │   └── Call_dentist_456.md
 ├── Work/
-│   ├── README.md
 │   ├── Finish_report_789.md
 │   └── Team_meeting_prep_012.md
 └── Inbox/
-    ├── README.md
     └── Random_idea_345.md
 ```
 
@@ -210,7 +170,6 @@ obsidian_export/
 
 ```
 obsidian_export/
-├── Todoist_Export_Index.md
 ├── Buy_groceries_123.md
 ├── Call_dentist_456.md
 ├── Finish_report_789.md
@@ -252,18 +211,9 @@ Need to pick up items for the week:
 - Bread
 - Fruits
 
-## Metadata
-
-- **Project**: [[Personal]]
-- **Priority**: Low
-- **Due Date**: 2024-01-16
-- **Labels**: #shopping, #errands
-- **Created**: 2024-01-15T10:30:00Z
-- **Todoist URL**: [Open in Todoist](https://todoist.com/showTask?id=123456789)
-
 ## Comments
 
-### Comment - 2024-01-15
+### Comment - 2024-01-15 10:30:00
 
 Don't forget organic milk this time!
 
@@ -309,39 +259,14 @@ Combine filters with `&` (AND) and `|` (OR):
 
 ## Development
 
-### Setup Development Environment
+### Development
 
 ```bash
-git clone https://github.com/username/todoist-to-notes.git
+git clone https://github.com/vrutkovs/todoist-to-notes.git
 cd todoist-to-notes
-
-# Install with development dependencies
-uv sync --dev
-```
-
-### Run Tests
-
-```bash
-uv run pytest
-```
-
-### Code Formatting
-
-```bash
-uv run black src/
-uv run isort src/
-```
-
-### Type Checking
-
-```bash
-uv run mypy src/
-```
-
-### Build Package
-
-```bash
-uv build
+make setup  # Install deps, setup, and pre-commit hooks
+make check  # Run tests and quality checks (ruff + pytest)
+make build  # Build package
 ```
 
 ## Troubleshooting
@@ -385,7 +310,7 @@ todoist-to-notes -v export
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 

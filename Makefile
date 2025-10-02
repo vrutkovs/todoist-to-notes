@@ -2,19 +2,20 @@
 #
 # This Makefile provides common development tasks for the project
 
-.PHONY: help install install-dev test test-cov lint format type-check clean build run-example setup init
+.PHONY: help install install-dev test test-cov lint format type-check clean build run-example setup init pre-commit
 
 # Default target
 help:
 	@echo "Available targets:"
-	@echo "  setup          - Complete project setup (install deps, init config)"
+	@echo "  setup          - Complete project setup (install deps, init config, pre-commit)"
 	@echo "  install        - Install project dependencies"
 	@echo "  install-dev    - Install development dependencies"
 	@echo "  init           - Initialize configuration (.env file)"
+	@echo "  pre-commit     - Install pre-commit hooks"
 	@echo "  test           - Run tests"
 	@echo "  test-cov       - Run tests with coverage report"
-	@echo "  lint           - Run linting (flake8)"
-	@echo "  format         - Format code (black, isort)"
+	@echo "  lint           - Run linting (ruff)"
+	@echo "  format         - Format code (ruff)"
 	@echo "  format-check   - Check code formatting without applying changes"
 	@echo "  type-check     - Run type checking (mypy)"
 	@echo "  clean          - Clean build artifacts and cache files"
@@ -26,7 +27,7 @@ help:
 	@echo "  cli-export     - Run example export"
 
 # Setup targets
-setup: install-dev init
+setup: install-dev init pre-commit
 	@echo "✅ Project setup complete!"
 	@echo "Next steps:"
 	@echo "  1. Edit .env file and add your Todoist API token"
@@ -42,6 +43,9 @@ install-dev:
 init:
 	uv run todoist-to-notes init
 
+pre-commit:
+	uv run pre-commit install
+
 # Testing targets
 test:
 	uv run pytest tests/ -v
@@ -51,15 +55,15 @@ test-cov:
 
 # Code quality targets
 lint:
-	uv run flake8 src/ tests/ examples/
+	uv run ruff check src/ tests/
 
 format:
-	uv run isort src/ tests/ examples/
-	uv run black src/ tests/ examples/
+	uv run ruff format src/ tests/
+	uv run ruff check --fix src/ tests/
 
 format-check:
-	uv run isort --check-only src/ tests/ examples/
-	uv run black --check src/ tests/ examples/
+	uv run ruff format --check src/ tests/
+	uv run ruff check src/ tests/
 
 type-check:
 	uv run mypy src/
@@ -85,9 +89,8 @@ build: clean
 
 # Example and CLI targets
 run-example:
-	@echo "Running example usage script..."
-	@echo "Make sure you have set TODOIST_API_TOKEN in .env file"
-	cd examples && uv run python example_usage.py
+	@echo "Example usage removed - use CLI commands directly"
+	@echo "Run 'make cli-export' to test export functionality"
 
 cli-help:
 	uv run todoist-to-notes --help
@@ -129,8 +132,7 @@ version-major:
 # Documentation
 docs-serve:
 	@echo "README.md contains the main documentation"
-	@echo "Examples are in examples/ directory"
-	@echo "Usage guide: examples/USAGE_GUIDE.md"
+	@echo "Check README.md for usage instructions"
 
 # Docker targets (future enhancement)
 docker-build:

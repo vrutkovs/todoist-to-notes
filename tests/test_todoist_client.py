@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from todoist_to_notes.todoist_client import (
+from src.todoist_client import (
     TodoistAPIError,
     TodoistClient,
     TodoistComment,
@@ -23,14 +23,13 @@ class TestTodoistModels:
             "id": "123",
             "name": "Test Project",
             "color": "red",
-            "is_favorite": True,
             "is_shared": False,
             "url": "https://todoist.com/showProject?id=123",
         }
         project = TodoistProject(**data)
         assert project.id == "123"
         assert project.name == "Test Project"
-        assert project.is_favorite is True
+        assert project.is_shared is False
 
     def test_todoist_task_creation(self):
         """Test creating a TodoistTask from data."""
@@ -105,9 +104,11 @@ class TestTodoistClient:
 
     def test_client_initialization_no_token(self):
         """Test client initialization fails without token."""
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(TodoistAPIError, match="API token is required"):
-                TodoistClient()
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            pytest.raises(TodoistAPIError, match="API token is required"),
+        ):
+            TodoistClient()
 
     @pytest.fixture
     def mock_client(self):
@@ -135,13 +136,15 @@ class TestTodoistClient:
 
     def test_make_request_failure(self, mock_client):
         """Test failed API request."""
-        with patch.object(
-            mock_client.session,
-            "request",
-            side_effect=requests.exceptions.RequestException("Network error"),
+        with (
+            patch.object(
+                mock_client.session,
+                "request",
+                side_effect=requests.exceptions.RequestException("Network error"),
+            ),
+            pytest.raises(TodoistAPIError, match="Failed to make request"),
         ):
-            with pytest.raises(TodoistAPIError, match="Failed to make request"):
-                mock_client._make_request("GET", "/test")
+            mock_client._make_request("GET", "/test")
 
     def test_get_projects(self, mock_client):
         """Test getting projects."""
@@ -150,7 +153,6 @@ class TestTodoistClient:
                 "id": "123",
                 "name": "Project 1",
                 "color": "red",
-                "is_favorite": False,
                 "is_shared": False,
                 "url": "",
             },
@@ -158,7 +160,6 @@ class TestTodoistClient:
                 "id": "456",
                 "name": "Project 2",
                 "color": "blue",
-                "is_favorite": True,
                 "is_shared": True,
                 "url": "",
             },
@@ -171,7 +172,7 @@ class TestTodoistClient:
             assert len(projects) == 2
             assert isinstance(projects[0], TodoistProject)
             assert projects[0].name == "Project 1"
-            assert projects[1].is_favorite is True
+            assert projects[1].is_shared is True
 
     def test_get_tasks(self, mock_client):
         """Test getting tasks."""

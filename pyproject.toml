@@ -7,23 +7,19 @@ name = "todoist-to-notes"
 dynamic = ["version"]
 description = "Export Todoist tasks as Obsidian notes"
 readme = "README.md"
-requires-python = ">=3.8"
-license = "MIT"
+requires-python = ">=3.13"
+license = "Apache-2.0"
 keywords = ["todoist", "obsidian", "notes", "productivity"]
 authors = [
-    { name = "User", email = "user@example.com" },
+    { name = "vrutkovs", email = "vadim@vrutkovs.eu" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Scheduling",
     "Topic :: Text Processing :: Markup :: Markdown",
 ]
@@ -39,42 +35,34 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
-    "black>=22.0.0",
-    "isort>=5.10.0",
-    "flake8>=5.0.0",
     "mypy>=1.0.0",
+    "types-requests>=2.28.0",
+    "pre-commit>=3.0.0",
+    "ruff>=0.1.0",
 ]
 
 [project.urls]
-Documentation = "https://github.com/username/todoist-to-notes#readme"
-Issues = "https://github.com/username/todoist-to-notes/issues"
-Source = "https://github.com/username/todoist-to-notes"
+Documentation = "https://github.com/vrutkovs/todoist-to-notes#readme"
+Issues = "https://github.com/vrutkovs/todoist-to-notes/issues"
+Source = "https://github.com/vrutkovs/todoist-to-notes"
 
 [project.scripts]
-todoist-to-notes = "todoist_to_notes.cli:main"
+todoist-to-notes = "src.cli:main"
 
 [tool.hatch.version]
-path = "src/todoist_to_notes/__about__.py"
+path = "src/__about__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/todoist_to_notes"]
-
-[tool.black]
-target-version = ["py38"]
-line-length = 88
-skip-string-normalization = true
-
-[tool.isort]
-profile = "black"
-known_first_party = ["todoist_to_notes"]
+packages = ["src"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.13"
 warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
 show_error_codes = true
+exclude = ["tests/"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -93,18 +81,39 @@ exclude_lines = [
     "if TYPE_CHECKING:",
 ]
 
-[tool.flake8]
-max-line-length = 88
-extend-ignore = ["E203", "E501", "W503"]
-exclude = [".git", "__pycache__", "dist", "build", "*.egg-info"]
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # line too long, handled by formatter
+    "B008", # do not perform function calls in argument defaults
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
 
 [dependency-groups]
 dev = [
-    "black>=24.8.0",
-    "flake8>=5.0.4",
-    "isort>=5.13.2",
-    "mypy>=1.14.1",
-    "pytest>=8.3.5",
-    "pytest-cov>=5.0.0",
-    "types-requests>=2.32.0.20241016",
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+    "types-requests>=2.32.4.20250913",
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]

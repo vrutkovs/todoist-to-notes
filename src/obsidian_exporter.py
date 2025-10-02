@@ -3,9 +3,11 @@
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
 
 from .todoist_client import TodoistComment, TodoistProject, TodoistTask
 
@@ -25,7 +27,7 @@ class ExportConfig:
     tag_prefix: str = "todoist"
     priority_as_tags: bool = True
     labels_as_tags: bool = True
-    template_path: Optional[Path] = None
+    template_path: Path | None = None
 
 
 class ObsidianExporter:
@@ -61,7 +63,7 @@ class ObsidianExporter:
             sanitized = sanitized[:200].rstrip("_")
         return sanitized or "untitled"
 
-    def format_tags(self, task: TodoistTask, project: TodoistProject) -> List[str]:
+    def format_tags(self, task: TodoistTask, project: TodoistProject) -> list[str]:
         """Generate tags for a task.
 
         Args:
@@ -151,7 +153,7 @@ class ObsidianExporter:
         self,
         task: TodoistTask,
         project: TodoistProject,
-        comments: Optional[List[TodoistComment]] = None,
+        comments: list[TodoistComment] | None = None,
     ) -> str:
         """Format a task as markdown content.
 
@@ -180,34 +182,17 @@ class ObsidianExporter:
             content.append(task.description)
             content.append("")
 
-        # Metadata section
-        content.append("## Metadata")
-        content.append("")
-        content.append(f"- **Project**: [[{self.sanitize_filename(project.name)}]]")
-        content.append(f"- **Priority**: {task.priority_text}")
-
-        if task.due_date:
-            content.append(f"- **Due Date**: {task.due_date}")
-
-        if task.labels:
-            labels_links = [f"#{label.replace(' ', '-')}" for label in task.labels]
-            content.append(f"- **Labels**: {', '.join(labels_links)}")
-
-        content.append(f"- **Created**: {task.created_at}")
-
-        if task.url:
-            content.append(f"- **Todoist URL**: [Open in Todoist]({task.url})")
-
-        content.append("")
-
         # Comments section
         if comments and self.config.include_comments:
             content.append("## Comments")
             content.append("")
 
             for comment in comments:
-                comment_date = comment.posted_at[:10]  # Extract date part
-                content.append(f"### Comment - {comment_date}")
+                # Format datetime without timezone
+                comment_datetime = comment.posted_at.replace("Z", "").replace("T", " ")
+                if "." in comment_datetime:
+                    comment_datetime = comment_datetime.split(".")[0]
+                content.append(f"### Comment - {comment_datetime}")
                 content.append("")
                 content.append(comment.content)
                 content.append("")
@@ -250,7 +235,7 @@ class ObsidianExporter:
         self,
         task: TodoistTask,
         project: TodoistProject,
-        comments: Optional[List[TodoistComment]] = None,
+        comments: list[TodoistComment] | None = None,
     ) -> Path:
         """Export a single task as a markdown note.
 
@@ -277,131 +262,3 @@ class ObsidianExporter:
 
         logger.info(f"Exported task '{task.content}' to {output_path}")
         return output_path
-
-    def export_project_index(
-        self, project: TodoistProject, task_files: List[Path]
-    ) -> Optional[Path]:
-        """Create an index note for a project.
-
-        Args:
-            project: The project
-            task_files: List of task file paths in this project
-
-        Returns:
-            Path to the created index file
-        """
-        if not self.config.create_project_folders:
-            return None
-
-        project_dir = self.output_dir / self.sanitize_filename(project.name)
-        index_path = project_dir / "README.md"
-
-        content = []
-        content.append("---")
-        content.append(f'title: "{project.name} - Project Index"')
-        content.append(f'todoist_project_id: "{project.id}"')
-        content.append(f'project_color: "{project.color}"')
-        content.append(f"is_favorite: {str(project.is_favorite).lower()}")
-        content.append(
-            f'tags: ["{self.config.tag_prefix}", "{self.config.tag_prefix}/project"]'
-        )
-        content.append("---")
-        content.append("")
-        content.append(f"# {project.name}")
-        content.append("")
-        content.append(
-            f"This is the project index for **{project.name}** from Todoist."
-        )
-        content.append("")
-
-        if task_files:
-            content.append("## Tasks")
-            content.append("")
-            for task_file in sorted(task_files):
-                task_name = task_file.stem.rsplit("_", 1)[0].replace("_", " ")
-                content.append(f"- [[{task_file.stem}|{task_name}]]")
-            content.append("")
-
-        content.append("---")
-        content.append("")
-        content.append(f"#{self.config.tag_prefix} #{self.config.tag_prefix}/project")
-
-        with open(index_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(content))
-
-        logger.info(f"Created project index for '{project.name}' at {index_path}")
-        return index_path
-
-    def create_master_index(
-        self, projects: List[TodoistProject], exported_counts: Dict[str, int]
-    ) -> Path:
-        """Create a master index of all exported projects and tasks.
-
-        Args:
-            projects: List of all projects
-            exported_counts: Dict mapping project IDs to task counts
-
-        Returns:
-            Path to the master index file
-        """
-        index_path = self.output_dir / "Todoist_Export_Index.md"
-
-        content = []
-        content.append("---")
-        content.append('title: "Todoist Export Index"')
-        content.append(f'export_date: "{datetime.now().isoformat()}"')
-        content.append(
-            f'tags: ["{self.config.tag_prefix}", "{self.config.tag_prefix}/index"]'
-        )
-        content.append("---")
-        content.append("")
-        content.append("# Todoist Export Index")
-        content.append("")
-        content.append(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-        total_tasks = sum(exported_counts.values())
-        content.append(f"**Total Projects**: {len(projects)}")
-        content.append(f"**Total Tasks Exported**: {total_tasks}")
-        content.append("")
-
-        if projects:
-            content.append("## Projects")
-            content.append("")
-
-            for project in sorted(projects, key=lambda p: p.name):
-                task_count = exported_counts.get(project.id, 0)
-                if self.config.create_project_folders:
-                    project_link = (
-                        f"[[{self.sanitize_filename(project.name)}/"
-                        f"README|{project.name}]]"
-                    )
-                else:
-                    project_link = project.name
-
-                content.append(f"- {project_link} ({task_count} tasks)")
-
-            content.append("")
-
-        content.append("## Usage")
-        content.append("")
-        content.append("This export includes:")
-        content.append(
-            f"- {'✅' if self.config.include_completed else '❌'} Completed tasks"
-        )
-        content.append(
-            f"- {'✅' if self.config.include_comments else '❌'} Task comments"
-        )
-        content.append(
-            f"- {'✅' if self.config.create_project_folders else '❌'} Project folders"
-        )
-        content.append("")
-
-        content.append("---")
-        content.append("")
-        content.append(f"#{self.config.tag_prefix} #{self.config.tag_prefix}/index")
-
-        with open(index_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(content))
-
-        logger.info(f"Created master index at {index_path}")
-        return index_path

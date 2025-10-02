@@ -3,7 +3,10 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
 
 import click
 from dotenv import load_dotenv
@@ -35,7 +38,7 @@ def setup_logging(verbose: bool = False) -> None:
 
 @click.group()
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
-@click.version_option()
+@click.version_option(package_name="todoist-to-notes")
 def cli(verbose: bool):
     """Export Todoist tasks as Obsidian-compatible markdown notes."""
     setup_logging(verbose)
@@ -48,7 +51,7 @@ def cli(verbose: bool):
     envvar="TODOIST_API_TOKEN",
     help="Todoist API token (or set TODOIST_API_TOKEN env var)",
 )
-def test(api_token: Optional[str]):
+def test(api_token: str | None):
     """Test connection to Todoist API."""
     if not api_token:
         console.print(
@@ -88,7 +91,7 @@ def test(api_token: Optional[str]):
     envvar="TODOIST_API_TOKEN",
     help="Todoist API token (or set TODOIST_API_TOKEN env var)",
 )
-def list_projects(api_token: Optional[str]):
+def list_projects(api_token: str | None):
     """List all projects in your Todoist account."""
     if not api_token:
         console.print(
@@ -110,7 +113,6 @@ def list_projects(api_token: Optional[str]):
         table.add_column("ID", style="cyan")
         table.add_column("Name", style="magenta")
         table.add_column("Color", style="green")
-        table.add_column("Favorite", justify="center")
         table.add_column("Shared", justify="center")
 
         for project in projects:
@@ -118,7 +120,6 @@ def list_projects(api_token: Optional[str]):
                 project.id,
                 project.name,
                 project.color,
-                "⭐" if project.is_favorite else "",
                 "🔗" if project.is_shared else "",
             )
 
@@ -166,14 +167,14 @@ def list_projects(api_token: Optional[str]):
 )
 def export(
     output_dir: Path,
-    api_token: Optional[str],
-    project_id: Optional[str],
-    project_name: Optional[str],
+    api_token: str | None,
+    project_id: str | None,
+    project_name: str | None,
     include_completed: bool,
     no_comments: bool,
     no_project_folders: bool,
     tag_prefix: str,
-    filter: Optional[str],
+    filter: str | None,
 ):
     """Export Todoist tasks as Obsidian markdown notes."""
     if not api_token:
@@ -281,37 +282,6 @@ def export(
 
                 progress.advance(export_task)
 
-        # Create project indices if using project folders
-        if config.create_project_folders:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-            ) as progress:
-                progress.add_task("Creating project indices...", total=None)
-
-                for project_id, count in exported_counts.items():
-                    if count > 0:
-                        project = projects_dict[project_id]
-                        project_dir = output_dir / exporter.sanitize_filename(
-                            project.name
-                        )
-                        task_files = list(project_dir.glob("*.md"))
-                        task_files = [f for f in task_files if f.name != "README.md"]
-                        exporter.export_project_index(project, task_files)
-
-        # Create master index
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            progress.add_task("Creating master index...", total=None)
-            relevant_projects = [
-                p for p in projects if exported_counts.get(p.id, 0) > 0
-            ]
-            exporter.create_master_index(relevant_projects, exported_counts)
-
         # Show summary
         summary = Panel.fit(
             f"[green]✅ Export completed successfully![/green]\n\n"
@@ -350,10 +320,11 @@ def init(output_dir: Path):
     """Initialize configuration by creating a .env file template."""
     env_path = output_dir / ".env"
 
-    if env_path.exists():
-        if not click.confirm(f".env file already exists at {env_path}. Overwrite?"):
-            console.print("Initialization cancelled.")
-            return
+    if env_path.exists() and not click.confirm(
+        f".env file already exists at {env_path}. Overwrite?"
+    ):
+        console.print("Initialization cancelled.")
+        return
 
     env_content = """# Todoist to Obsidian Notes Exporter Configuration
 #

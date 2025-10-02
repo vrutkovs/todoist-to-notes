@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 from pydantic import BaseModel, Field
@@ -16,7 +16,6 @@ class TodoistProject(BaseModel):
     id: str
     name: str
     color: str
-    is_favorite: bool = False
     is_shared: bool = False
     url: str = ""
 
@@ -28,22 +27,22 @@ class TodoistTask(BaseModel):
     content: str
     description: str = ""
     project_id: str
-    section_id: Optional[str] = None
-    parent_id: Optional[str] = None
+    section_id: str | None = None
+    parent_id: str | None = None
     order: int
     priority: int = 1
-    labels: List[str] = Field(default_factory=list)
-    due: Optional[Dict[str, Any]] = None
+    labels: list[str] = Field(default_factory=list)
+    due: dict[str, Any] | None = None
     url: str = ""
     comment_count: int = 0
     is_completed: bool = False
     created_at: str
     creator_id: str = ""
-    assignee_id: Optional[str] = None
-    assigner_id: Optional[str] = None
+    assignee_id: str | None = None
+    assigner_id: str | None = None
 
     @property
-    def due_date(self) -> Optional[str]:
+    def due_date(self) -> str | None:
         """Extract due date as string if available."""
         if self.due and "date" in self.due:
             return self.due["date"]
@@ -63,7 +62,7 @@ class TodoistComment(BaseModel):
     task_id: str
     content: str
     posted_at: str
-    attachment: Optional[Dict[str, Any]] = None
+    attachment: dict[str, Any] | None = None
 
 
 class TodoistAPIError(Exception):
@@ -77,7 +76,7 @@ class TodoistClient:
 
     BASE_URL = "https://api.todoist.com/rest/v2"
 
-    def __init__(self, api_token: Optional[str] = None):
+    def __init__(self, api_token: str | None = None):
         """Initialize the Todoist client.
 
         Args:
@@ -123,9 +122,9 @@ class TodoistClient:
             return response.json()
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed: {e}")
-            raise TodoistAPIError(f"Failed to make request to {url}: {e}")
+            raise TodoistAPIError(f"Failed to make request to {url}: {e}") from e
 
-    def get_projects(self) -> List[TodoistProject]:
+    def get_projects(self) -> list[TodoistProject]:
         """Fetch all projects.
 
         Returns:
@@ -136,8 +135,8 @@ class TodoistClient:
         return [TodoistProject(**project) for project in data]
 
     def get_tasks(
-        self, project_id: Optional[str] = None, filter_expr: Optional[str] = None
-    ) -> List[TodoistTask]:
+        self, project_id: str | None = None, filter_expr: str | None = None
+    ) -> list[TodoistTask]:
         """Fetch tasks, optionally filtered by project or filter expression.
 
         Args:
@@ -157,7 +156,7 @@ class TodoistClient:
         data = self._make_request("GET", "/tasks", params=params)
         return [TodoistTask(**task) for task in data]
 
-    def get_task_comments(self, task_id: str) -> List[TodoistComment]:
+    def get_task_comments(self, task_id: str) -> list[TodoistComment]:
         """Fetch comments for a specific task.
 
         Args:
@@ -172,16 +171,12 @@ class TodoistClient:
 
     def get_completed_tasks(
         self,
-        project_id: Optional[str] = None,
-        since: Optional[str] = None,
-        until: Optional[str] = None,
-    ) -> List[TodoistTask]:
+        project_id: str | None = None,
+    ) -> list[TodoistTask]:
         """Fetch completed tasks.
 
         Args:
             project_id: Optional project ID to filter tasks
-            since: Optional ISO date string for start of range
-            until: Optional ISO date string for end of range
 
         Returns:
             List of completed TodoistTask objects

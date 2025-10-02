@@ -170,11 +170,13 @@ class TestObsidianExporter:
 
         frontmatter = exporter.format_frontmatter(task_with_link, sample_project)
 
-        assert 'title: "GitHub Repository"' in frontmatter
+        # Should use full original content as title
         assert (
-            'original_title: "Check [GitHub Repository](https://github.com/user/repo) for updates"'
+            'title: "Check [GitHub Repository](https://github.com/user/repo) for updates"'
             in frontmatter
         )
+        # No original_title field should be present
+        assert "original_title:" not in frontmatter
 
     def test_format_task_content_with_link(self, exporter, sample_project):
         """Test formatting task content with markdown link."""
@@ -193,11 +195,14 @@ class TestObsidianExporter:
 
         content = exporter.format_task_content(task_with_link, sample_project)
 
-        # Should use link title in the heading
-        assert "# ⬜ Python Documentation" in content
+        # Should use original content in the heading
+        assert (
+            "# ⬜ Read [Python Documentation](https://docs.python.org) thoroughly"
+            in content
+        )
         # Should have original title in frontmatter
         assert (
-            'original_title: "Read [Python Documentation](https://docs.python.org) thoroughly"'
+            'title: "Read [Python Documentation](https://docs.python.org) thoroughly"'
             in content
         )
 
@@ -280,14 +285,17 @@ class TestObsidianExporter:
         # File should be named after task ID
         assert output_path.name == "888.md"
 
-        # Content should use link title in heading
+        # Content should use original content in heading
         content = output_path.read_text(encoding="utf-8")
-        assert "# ⬜ Project Documentation" in content
-        assert 'title: "Project Documentation"' in content
         assert (
-            'original_title: "Review [Project Documentation](https://docs.example.com)"'
+            "# ⬜ Review [Project Documentation](https://docs.example.com)" in content
+        )
+        assert (
+            'title: "Review [Project Documentation](https://docs.example.com)"'
             in content
         )
+        # No original_title field should be present
+        assert "original_title:" not in content
 
     def test_format_tags(self, exporter, sample_task, sample_project):
         """Test formatting tags for tasks."""
@@ -303,3 +311,53 @@ class TestObsidianExporter:
         ]
 
         assert all(tag in tags for tag in expected_tags)
+
+    def test_format_yaml_string_with_double_quotes(self, exporter):
+        """Test YAML string formatting with double quotes."""
+        result = exporter.format_yaml_string('Read "The Great Gatsby" book')
+        assert result == "'Read \"The Great Gatsby\" book'"
+
+    def test_format_yaml_string_with_single_quotes(self, exporter):
+        """Test YAML string formatting with single quotes."""
+        result = exporter.format_yaml_string("Check John's email")
+        assert result == '"Check John\'s email"'
+
+    def test_format_yaml_string_with_both_quotes(self, exporter):
+        """Test YAML string formatting with both quote types."""
+        result = exporter.format_yaml_string(
+            'Review "Project Alpha" and John\'s feedback'
+        )
+        assert result == '"Review \\"Project Alpha\\" and John\'s feedback"'
+
+    def test_format_yaml_string_with_special_chars(self, exporter):
+        """Test YAML string formatting with special characters."""
+        result = exporter.format_yaml_string("Text with\nnewlines and\ttabs")
+        assert result == '"Text with\\nnewlines and\\ttabs"'
+
+    def test_frontmatter_quote_escaping(self, exporter, sample_project):
+        """Test that quotes in titles are properly escaped in frontmatter."""
+        import yaml
+
+        task_with_quotes = TodoistTask(
+            id="quote_test",
+            content='Read "The Great Gatsby" today',
+            description="",
+            project_id="123",
+            order=1,
+            priority=1,
+            labels=[],
+            comment_count=0,
+            is_completed=False,
+            created_at="2024-01-01T10:00:00Z",
+        )
+
+        frontmatter = exporter.format_frontmatter(task_with_quotes, sample_project)
+
+        # Extract YAML content between --- markers
+        lines = frontmatter.split("\n")
+        yaml_content = "\n".join(lines[1:-2])  # Remove opening/closing ---
+
+        # Should parse as valid YAML
+        parsed = yaml.safe_load(yaml_content)
+        assert isinstance(parsed, dict)
+        assert parsed["title"] == 'Read "The Great Gatsby" today'

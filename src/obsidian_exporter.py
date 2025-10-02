@@ -82,6 +82,45 @@ class ObsidianExporter:
             sanitized = sanitized[:200].rstrip("_")
         return sanitized or "untitled"
 
+    def format_yaml_string(self, value: str) -> str:
+        """Format a string value for safe YAML output.
+
+        Uses single quotes when possible, double quotes with escaping when necessary.
+
+        Args:
+            value: String value to format
+
+        Returns:
+            Properly formatted YAML string value with quotes
+        """
+        # If the string contains single quotes but no double quotes, use double quotes
+        if "'" in value and '"' not in value:
+            return f'"{value}"'
+
+        # If the string contains double quotes but no single quotes, use single quotes
+        if '"' in value and "'" not in value:
+            return f"'{value}'"
+
+        # If the string contains both types of quotes or special chars, use double quotes with escaping
+        if (
+            '"' in value
+            or "'" in value
+            or "\n" in value
+            or "\t" in value
+            or "\\" in value
+        ):
+            # Escape backslashes first
+            escaped = value.replace("\\", "\\\\")
+            # Escape double quotes
+            escaped = escaped.replace('"', '\\"')
+            # Escape newlines and tabs
+            escaped = escaped.replace("\n", "\\n")
+            escaped = escaped.replace("\t", "\\t")
+            return f'"{escaped}"'
+
+        # For simple strings, use double quotes
+        return f'"{value}"'
+
     def format_tags(self, task: TodoistTask, project: TodoistProject) -> list[str]:
         """Generate tags for a task.
 
@@ -130,16 +169,10 @@ class ObsidianExporter:
         """
         frontmatter = ["---"]
 
-        # Extract link title if present
-        link_title = self.extract_link_title(task.content)
-        display_title = link_title if link_title else task.content
-
         # Basic metadata
-        frontmatter.append(f'title: "{display_title}"')
-        if link_title:
-            frontmatter.append(f'original_title: "{task.content}"')
-        frontmatter.append(f'todoist_id: "{task.id}"')
-        frontmatter.append(f'project: "{project.name}"')
+        frontmatter.append(f"title: {self.format_yaml_string(task.content)}")
+        frontmatter.append(f"todoist_id: {self.format_yaml_string(task.id)}")
+        frontmatter.append(f"project: {self.format_yaml_string(project.name)}")
         frontmatter.append(f'project_id: "{project.id}"')
         frontmatter.append(f'created: "{task.created_at}"')
 
@@ -197,11 +230,9 @@ class ObsidianExporter:
         # Add frontmatter
         content.append(self.format_frontmatter(task, project))
 
-        # Task title - use link title if available
-        link_title = self.extract_link_title(task.content)
-        display_title = link_title if link_title else task.content
+        # Task title
         status_icon = "✅" if task.is_completed else "⬜"
-        content.append(f"# {status_icon} {display_title}")
+        content.append(f"# {status_icon} {task.content}")
         content.append("")
 
         # Task description

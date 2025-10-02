@@ -22,7 +22,7 @@ from .scheduler import ScheduledSync
 from .todoist_client import TodoistAPIError, TodoistClient
 
 # Load environment variables from .env file
-load_dotenv()
+_ = load_dotenv()
 
 console = Console()
 
@@ -41,7 +41,7 @@ def setup_logging(verbose: bool = False) -> None:
 @click.group()
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 @click.version_option(package_name="todoist-to-notes")
-def cli(verbose: bool):
+def cli(verbose: bool) -> None:
     """Export Todoist tasks as Obsidian-compatible markdown notes."""
     setup_logging(verbose)
 
@@ -53,13 +53,13 @@ def cli(verbose: bool):
     envvar="TODOIST_API_TOKEN",
     help="Todoist API token (or set TODOIST_API_TOKEN env var)",
 )
-def test(api_token: str | None):
+def test(api_token: str | None) -> None:
     """Test connection to Todoist API."""
     if not api_token:
         console.print(
             "[red]Error:[/red] Todoist API token is required. "
-            "Set TODOIST_API_TOKEN environment variable or use "
-            "--api-token option."
+            + "Set TODOIST_API_TOKEN environment variable or use "
+            + "--api-token option."
         )
         sys.exit(1)
 
@@ -69,7 +69,7 @@ def test(api_token: str | None):
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            progress.add_task("Testing connection...", total=None)
+            _ = progress.add_task("Testing connection...", total=None)
 
             client = TodoistClient(api_token)
             if client.test_connection():
@@ -93,13 +93,13 @@ def test(api_token: str | None):
     envvar="TODOIST_API_TOKEN",
     help="Todoist API token (or set TODOIST_API_TOKEN env var)",
 )
-def list_projects(api_token: str | None):
+def list_projects(api_token: str | None) -> None:
     """List all projects in your Todoist account."""
     if not api_token:
         console.print(
             "[red]Error:[/red] Todoist API token is required. "
-            "Set TODOIST_API_TOKEN environment variable or use "
-            "--api-token option."
+            + "Set TODOIST_API_TOKEN environment variable or use "
+            + "--api-token option."
         )
         sys.exit(1)
 
@@ -177,13 +177,13 @@ def export(
     no_project_folders: bool,
     tag_prefix: str,
     filter: str | None,
-):
+) -> int | None:
     """Export Todoist tasks as Obsidian markdown notes."""
     if not api_token:
         console.print(
             "[red]Error:[/red] Todoist API token is required. "
-            "Set TODOIST_API_TOKEN environment variable or use "
-            "--api-token option."
+            + "Set TODOIST_API_TOKEN environment variable or use "
+            + "--api-token option."
         )
         sys.exit(1)
 
@@ -206,7 +206,7 @@ def export(
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            progress.add_task("Exporting tasks...", total=None)
+            _ = progress.add_task("Exporting tasks...", total=None)
 
             total_exported = export_tasks_internal(
                 client=client,
@@ -219,14 +219,14 @@ def export(
 
         # Show summary
         summary = Panel.fit(
-            f"[green]✅ Export completed successfully![/green]\n\n"
-            f"Exported: {total_exported} tasks\n"
-            f"Output directory: {output_dir.absolute()}\n\n"
-            f"Included completed tasks: "
-            f"{'Yes' if include_completed else 'No'}\n"
-            f"Included comments: {'Yes' if not no_comments else 'No'}\n"
-            f"Created project folders: "
-            f"{'Yes' if not no_project_folders else 'No'}",
+            "[green]✅ Export completed successfully![/green]\n\n"
+            + f"Exported: {total_exported} tasks\n"
+            + f"Output directory: {output_dir.absolute()}\n\n"
+            + "Included completed tasks: "
+            + f"{'Yes' if include_completed else 'No'}\n"
+            + f"Included comments: {'Yes' if not no_comments else 'No'}\n"
+            + "Created project folders: "
+            + f"{'Yes' if not no_project_folders else 'No'}",
             title="Export Summary",
             border_style="green",
         )
@@ -252,7 +252,7 @@ def export(
     default=Path.cwd(),
     help="Directory where to create the .env file",
 )
-def init(output_dir: Path):
+def init(output_dir: Path) -> None:
     """Initialize configuration by creating a .env file template."""
     env_path = output_dir / ".env"
 
@@ -276,7 +276,7 @@ TODOIST_API_TOKEN=your_token_here
 """
 
     with open(env_path, "w") as f:
-        f.write(env_content)
+        _ = f.write(env_content)
 
     console.print(f"[green]✅ Created .env template at {env_path}[/green]")
     console.print("\nNext steps:")
@@ -356,13 +356,13 @@ def schedule(
     sync_time: str | None,
     once: bool,
     no_status: bool,
-):
+) -> None:
     """Run scheduled sync of Todoist tasks to Obsidian notes."""
     if not api_token:
         console.print(
             "[red]Error:[/red] Todoist API token is required. "
-            "Set TODOIST_API_TOKEN environment variable or use "
-            "--api-token option."
+            + "Set TODOIST_API_TOKEN environment variable or use "
+            + "--api-token option."
         )
         sys.exit(1)
 
@@ -393,10 +393,10 @@ def schedule(
 
         # Setup schedule
         if sync_time:
-            sync.run_at(sync_time)
+            _ = sync.run_at(sync_time)
             console.print(f"[green]📅 Scheduled daily sync at {sync_time}[/green]")
         else:
-            sync.run_every(interval, "minutes")
+            _ = sync.run_every(interval, "minutes")
             console.print(f"[green]⏰ Scheduled sync every {interval} minutes[/green]")
 
         # Start the scheduler
@@ -409,7 +409,7 @@ def schedule(
         sys.exit(1)
 
 
-def main():
+def main() -> None:
     """Entry point for the CLI."""
     cli()
 

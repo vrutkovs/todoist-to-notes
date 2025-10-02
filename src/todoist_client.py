@@ -45,7 +45,8 @@ class TodoistTask(BaseModel):
     def due_date(self) -> str | None:
         """Extract due date as string if available."""
         if self.due and "date" in self.due:
-            return self.due["date"]
+            date_value = self.due["date"]
+            return str(date_value) if date_value is not None else None
         return None
 
     @property
@@ -74,7 +75,7 @@ class TodoistAPIError(Exception):
 class TodoistClient:
     """Client for interacting with the Todoist REST API."""
 
-    BASE_URL = "https://api.todoist.com/rest/v2"
+    BASE_URL: str = "https://api.todoist.com/rest/v2"
 
     def __init__(self, api_token: str | None = None):
         """Initialize the Todoist client.
@@ -82,21 +83,21 @@ class TodoistClient:
         Args:
             api_token: Todoist API token. If not provided, will try to get from environment.
         """
-        self.api_token = api_token or os.getenv("TODOIST_API_TOKEN")
+        self.api_token: str | None = api_token or os.getenv("TODOIST_API_TOKEN")
         if not self.api_token:
             raise TodoistAPIError(
                 "Todoist API token is required. Set TODOIST_API_TOKEN "
-                "environment variable or pass it directly to the constructor."
+                + "environment variable or pass it directly to the constructor."
             )
 
-        self.headers = {
+        self.headers: dict[str, str] = {
             "Authorization": f"Bearer {self.api_token}",
             "Content-Type": "application/json",
         }
-        self.session = requests.Session()
+        self.session: requests.Session = requests.Session()
         self.session.headers.update(self.headers)
 
-    def _make_request(self, method: str, endpoint: str, **kwargs) -> Any:
+    def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> Any:
         """Make a request to the Todoist API.
 
         Args:
@@ -201,7 +202,7 @@ class TodoistClient:
             True if connection is successful, False otherwise
         """
         try:
-            self.get_projects()
+            _ = self.get_projects()
             logger.info("Successfully connected to Todoist API")
             return True
         except TodoistAPIError as e:

@@ -41,23 +41,23 @@ class ScheduledSync:
             filter_expr: Optional Todoist filter expression
             include_completed: Whether to include completed tasks
         """
-        self.api_token = api_token
-        self.export_config = export_config
-        self.project_id = project_id
-        self.project_name = project_name
-        self.filter_expr = filter_expr
-        self.include_completed = include_completed
+        self.api_token: str = api_token
+        self.export_config: ExportConfig = export_config
+        self.project_id: str | None = project_id
+        self.project_name: str | None = project_name
+        self.filter_expr: str | None = filter_expr
+        self.include_completed: bool = include_completed
 
-        self.client = TodoistClient(api_token)
+        self.client: TodoistClient = TodoistClient(api_token)
         self.last_sync: datetime | None = None
-        self.sync_count = 0
-        self.is_running = False
+        self.sync_count: int = 0
+        self.is_running: bool = False
 
         # Setup signal handlers for graceful shutdown
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+        _ = signal.signal(signal.SIGINT, self._signal_handler)
+        _ = signal.signal(signal.SIGTERM, self._signal_handler)
 
-    def _signal_handler(self, signum: int, _frame) -> None:
+    def _signal_handler(self, signum: int, _frame: object) -> None:
         """Handle shutdown signals gracefully."""
         logger.info(f"Received signal {signum}, shutting down gracefully...")
         self.stop()
@@ -97,7 +97,7 @@ class ScheduledSync:
             )
             console.print(
                 f"[green]✅ Sync completed in {duration:.2f}s - "
-                f"Exported {exported_count} tasks[/green]"
+                + f"Exported {exported_count} tasks[/green]"
             )
 
             return True
@@ -118,36 +118,38 @@ class ScheduledSync:
 
         # Status indicator
         if self.is_running:
-            status_text.append("🟢 Running", style="green bold")
+            _ = status_text.append("🟢 Running", style="green bold")
         else:
-            status_text.append("🔴 Stopped", style="red bold")
+            _ = status_text.append("🔴 Stopped", style="red bold")
 
-        status_text.append(f"\nSync count: {self.sync_count}")
+        _ = status_text.append(f"\nSync count: {self.sync_count}")
 
         if self.last_sync:
-            status_text.append(
+            _ = status_text.append(
                 f"\nLast sync: {self.last_sync.strftime('%Y-%m-%d %H:%M:%S')}"
             )
         else:
-            status_text.append("\nLast sync: Never")
+            _ = status_text.append("\nLast sync: Never")
 
         # Next scheduled sync
         next_run = schedule.next_run()
         if next_run:
-            status_text.append(f"\nNext sync: {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
+            _ = status_text.append(
+                f"\nNext sync: {next_run.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
 
         # Configuration summary
-        status_text.append(f"\nOutput: {self.export_config.output_dir}")
+        _ = status_text.append(f"\nOutput: {self.export_config.output_dir}")
 
         if self.project_name:
-            status_text.append(f"\nProject: {self.project_name}")
+            _ = status_text.append(f"\nProject: {self.project_name}")
         elif self.project_id:
-            status_text.append(f"\nProject ID: {self.project_id}")
+            _ = status_text.append(f"\nProject ID: {self.project_id}")
 
         if self.filter_expr:
-            status_text.append(f"\nFilter: {self.filter_expr}")
+            _ = status_text.append(f"\nFilter: {self.filter_expr}")
 
-        status_text.append(f"\nInclude completed: {self.include_completed}")
+        _ = status_text.append(f"\nInclude completed: {self.include_completed}")
 
         return Panel(
             status_text,
@@ -167,11 +169,11 @@ class ScheduledSync:
             Self for method chaining
         """
         if unit == "minutes":
-            schedule.every(interval).minutes.do(self.sync_tasks)
+            _ = schedule.every(interval).minutes.do(self.sync_tasks)
         elif unit == "hours":
-            schedule.every(interval).hours.do(self.sync_tasks)
+            _ = schedule.every(interval).hours.do(self.sync_tasks)
         elif unit == "seconds":
-            schedule.every(interval).seconds.do(self.sync_tasks)
+            _ = schedule.every(interval).seconds.do(self.sync_tasks)
         else:
             raise ValueError(f"Unsupported time unit: {unit}")
 
@@ -187,7 +189,7 @@ class ScheduledSync:
         Returns:
             Self for method chaining
         """
-        schedule.every().day.at(time_str).do(self.sync_tasks)
+        _ = schedule.every().day.at(time_str).do(self.sync_tasks)
         logger.info(f"Scheduled daily sync at {time_str}")
         return self
 
@@ -214,7 +216,7 @@ class ScheduledSync:
         # Run initial sync if scheduled
         if schedule.jobs:
             console.print("[blue]Running initial sync...[/blue]")
-            self.sync_tasks()
+            _ = self.sync_tasks()
 
         if show_status:
             try:
@@ -236,6 +238,6 @@ class ScheduledSync:
     def stop(self) -> None:
         """Stop the scheduler."""
         self.is_running = False
-        schedule.clear()
+        _ = schedule.clear()
         console.print("[red]🛑 Scheduler stopped[/red]")
         logger.info("Scheduler stopped")

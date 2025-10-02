@@ -40,8 +40,8 @@ class ObsidianExporter:
         Args:
             config: Export configuration
         """
-        self.config = config
-        self.output_dir = Path(config.output_dir)
+        self.config: ExportConfig = config
+        self.output_dir: Path = Path(config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def extract_link_title(self, text: str) -> str | None:

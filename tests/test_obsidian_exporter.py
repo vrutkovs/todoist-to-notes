@@ -16,7 +16,6 @@ class TestObsidianExporter:
         """Create test export configuration."""
         return ExportConfig(
             output_dir=tmp_path,
-            create_project_folders=False,
             include_completed=False,
             include_comments=True,
             tag_prefix="test",
@@ -206,7 +205,7 @@ class TestObsidianExporter:
         """Test getting output path for basic task."""
         path = exporter.get_output_path(sample_task, sample_project)
 
-        assert path.name == "Sample task content_456.md"
+        assert path.name == "456.md"
         assert path.parent == exporter.output_dir
 
     def test_get_output_path_with_link(self, exporter, sample_project):
@@ -226,8 +225,8 @@ class TestObsidianExporter:
 
         path = exporter.get_output_path(task_with_link, sample_project)
 
-        # Should use link title for filename
-        assert path.name == "Google Homepage_789.md"
+        # Should use task ID for filename
+        assert path.name == "789.md"
 
     def test_get_output_path_non_ascii(self, exporter, sample_project):
         """Test getting output path with non-ASCII characters."""
@@ -246,8 +245,8 @@ class TestObsidianExporter:
 
         path = exporter.get_output_path(task_with_unicode, sample_project)
 
-        # Should convert to ASCII
-        assert path.name == "Creer une tache speciale_999.md"
+        # Should use task ID for filename
+        assert path.name == "999.md"
 
     def test_export_task_creates_file(self, exporter, sample_task, sample_project):
         """Test that export_task actually creates a file."""
@@ -278,8 +277,8 @@ class TestObsidianExporter:
 
         output_path = exporter.export_task(task_with_link, sample_project)
 
-        # File should be named after link title
-        assert output_path.name == "Project Documentation_888.md"
+        # File should be named after task ID
+        assert output_path.name == "888.md"
 
         # Content should use link title in heading
         content = output_path.read_text(encoding="utf-8")

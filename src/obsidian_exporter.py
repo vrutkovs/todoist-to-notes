@@ -20,7 +20,6 @@ class ExportConfig:
     """Configuration for the export process."""
 
     output_dir: Path
-    create_project_folders: bool = True
     include_completed: bool = False
     include_comments: bool = True
     date_format: str = "%Y-%m-%d"
@@ -180,6 +179,7 @@ class ObsidianExporter:
         task: TodoistTask,
         project: TodoistProject,
         comments: list[TodoistComment] | None = None,
+        child_tasks: list[TodoistTask] | None = None,
     ) -> str:
         """Format a task as markdown content.
 
@@ -187,6 +187,7 @@ class ObsidianExporter:
             task: The Todoist task
             project: The project the task belongs to
             comments: Optional list of comments
+            child_tasks: Optional list of child tasks to include as checkboxes
 
         Returns:
             Formatted markdown content
@@ -210,6 +211,17 @@ class ObsidianExporter:
             content.append(task.description)
             content.append("")
 
+        # Child tasks as checkboxes
+        if child_tasks:
+            content.append("## Subtasks")
+            content.append("")
+
+            for child_task in sorted(child_tasks, key=lambda t: t.order):
+                checkbox = "[x]" if child_task.is_completed else "[ ]"
+                content.append(f"- {checkbox} {child_task.content}")
+
+            content.append("")
+
         # Comments section
         if comments and self.config.include_comments:
             content.append("## Comments")
@@ -225,16 +237,9 @@ class ObsidianExporter:
                 content.append(comment.content)
                 content.append("")
 
-        # Tags
-        tags = self.format_tags(task, project)
-        if tags:
-            content.append("---")
-            content.append("")
-            content.append(" ".join(tags))
-
         return "\n".join(content)
 
-    def get_output_path(self, task: TodoistTask, project: TodoistProject) -> Path:
+    def get_output_path(self, task: TodoistTask, project: TodoistProject) -> Path:  # noqa: ARG002
         """Determine the output path for a task note.
 
         Args:
@@ -244,20 +249,10 @@ class ObsidianExporter:
         Returns:
             Path where the note should be saved
         """
-        if self.config.create_project_folders:
-            project_dir = self.output_dir / self.sanitize_filename(project.name)
-            project_dir.mkdir(exist_ok=True)
-            output_dir = project_dir
-        else:
-            output_dir = self.output_dir
+        output_dir = self.output_dir
 
-        # Generate filename from task content (use link title if available)
-        link_title = self.extract_link_title(task.content)
-        title_for_filename = link_title if link_title else task.content
-        filename = self.sanitize_filename(title_for_filename)
-
-        # Add task ID to avoid conflicts
-        filename = f"{filename}_{task.id}"
+        # Use task ID as filename
+        filename = task.id
 
         return output_dir / f"{filename}.md"
 
@@ -266,6 +261,7 @@ class ObsidianExporter:
         task: TodoistTask,
         project: TodoistProject,
         comments: list[TodoistComment] | None = None,
+        child_tasks: list[TodoistTask] | None = None,
     ) -> Path:
         """Export a single task as a markdown note.
 
@@ -273,6 +269,7 @@ class ObsidianExporter:
             task: The Todoist task to export
             project: The project the task belongs to
             comments: Optional comments for the task
+            child_tasks: Optional list of child tasks to include as checkboxes
 
         Returns:
             Path to the created note file
@@ -284,11 +281,52 @@ class ObsidianExporter:
             logger.debug(f"Skipping completed task: {task.content}")
             return output_path
 
-        content = self.format_task_content(task, project, comments)
+        # Check if file already exists and preserve user content after ---
+        existing_user_content = ""
+        if output_path.exists():
+            try:
+                with open(output_path, encoding="utf-8") as f:
+                    existing_content = f.read()
+
+                # Find content after the last --- separator that isn't part of frontmatter
+                lines = existing_content.split("\n")
+
+                # Find all --- separators
+                separators = []
+                for i, line in enumerate(lines):
+                    if line.strip() == "---":
+                        separators.append(i)
+
+                # If we have at least 2 separators (frontmatter start/end),
+                # look for additional separators that might indicate user content
+                if len(separators) >= 3:
+                    # The third separator (index 2) marks the start of user content
+                    user_content_start = separators[2] + 1
+                    user_lines = lines[user_content_start:]
+
+                    # Only preserve if there's actual content
+                    if user_lines and any(line.strip() for line in user_lines):
+                        existing_user_content = "\n".join(user_lines)
+                        if existing_user_content.strip():
+                            existing_user_content = (
+                                "\n\n---\n\n" + existing_user_content
+                            )
+                            logger.debug(
+                                f"Preserved user content for task '{task.content}'"
+                            )
+
+            except Exception as e:
+                logger.warning(f"Failed to read existing file {output_path}: {e}")
+
+        # Generate new content
+        new_content = self.format_task_content(task, project, comments, child_tasks)
+
+        # Combine with preserved user content
+        final_content = new_content + existing_user_content
 
         # Write the file
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(content)
+            f.write(final_content)
 
         logger.info(f"Exported task '{task.content}' to {output_path}")
         return output_path

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     pass
 
 from .obsidian_exporter import ExportConfig, ObsidianExporter
-from .todoist_client import TodoistAPIError, TodoistClient
+from .todoist_client import TodoistAPIError, TodoistClient, TodoistTask
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +57,26 @@ def export_tasks_internal(
         logger.info("No tasks found matching the specified criteria")
         return 0
 
+    # Group tasks by parent/child relationship
+    parent_tasks = []
+    child_tasks_by_parent: dict[str, list[TodoistTask]] = {}
+
+    for task in tasks:
+        if task.parent_id:
+            # This is a child task
+            if task.parent_id not in child_tasks_by_parent:
+                child_tasks_by_parent[task.parent_id] = []
+            child_tasks_by_parent[task.parent_id].append(task)
+        else:
+            # This is a parent task (or standalone task)
+            parent_tasks.append(task)
+
     # Initialize exporter
     exporter = ObsidianExporter(export_config)
 
-    # Export tasks
+    # Export only parent tasks (standalone tasks and parents with children)
     exported_count = 0
-    for task in tasks:
+    for task in parent_tasks:
         project = projects_dict.get(task.project_id)
         if not project:
             logger.warning(f"Project not found for task: {task.content}")
@@ -72,6 +86,9 @@ def export_tasks_internal(
         if task.is_completed and not include_completed:
             continue
 
+        # Get child tasks for this parent
+        child_tasks = child_tasks_by_parent.get(task.id, [])
+
         # Get comments if enabled
         comments = None
         if export_config.include_comments and task.comment_count > 0:
@@ -80,9 +97,9 @@ def export_tasks_internal(
             except TodoistAPIError as e:
                 logger.warning(f"Failed to get comments for task '{task.content}': {e}")
 
-        # Export the task
+        # Export the task with its child tasks
         try:
-            exporter.export_task(task, project, comments)
+            exporter.export_task(task, project, comments, child_tasks)
             exported_count += 1
         except Exception as e:
             logger.error(f"Failed to export task '{task.content}': {e}")

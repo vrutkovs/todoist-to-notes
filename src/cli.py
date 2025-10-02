@@ -153,11 +153,6 @@ def list_projects(api_token: str | None) -> None:
 )
 @click.option("--no-comments", is_flag=True, help="Skip exporting task comments")
 @click.option(
-    "--no-project-folders",
-    is_flag=True,
-    help="Don't create separate folders for each project",
-)
-@click.option(
     "--tag-prefix",
     default="todoist",
     help="Prefix for generated tags (default: todoist)",
@@ -174,7 +169,6 @@ def export(
     project_name: str | None,
     include_completed: bool,
     no_comments: bool,
-    no_project_folders: bool,
     tag_prefix: str,
     filter: str | None,
 ) -> int | None:
@@ -194,7 +188,6 @@ def export(
         # Configure exporter
         config = ExportConfig(
             output_dir=output_dir,
-            create_project_folders=not no_project_folders,
             include_completed=include_completed,
             include_comments=not no_comments,
             tag_prefix=tag_prefix,
@@ -224,9 +217,7 @@ def export(
             + f"Output directory: {output_dir.absolute()}\n\n"
             + "Included completed tasks: "
             + f"{'Yes' if include_completed else 'No'}\n"
-            + f"Included comments: {'Yes' if not no_comments else 'No'}\n"
-            + "Created project folders: "
-            + f"{'Yes' if not no_project_folders else 'No'}",
+            + f"Included comments: {'Yes' if not no_comments else 'No'}",
             title="Export Summary",
             border_style="green",
         )
@@ -271,7 +262,6 @@ TODOIST_API_TOKEN=your_token_here
 # EXPORT_OUTPUT_DIR=./obsidian_export
 # EXPORT_INCLUDE_COMPLETED=false
 # EXPORT_INCLUDE_COMMENTS=true
-# EXPORT_CREATE_PROJECT_FOLDERS=true
 # EXPORT_TAG_PREFIX=todoist
 """
 
@@ -306,11 +296,6 @@ TODOIST_API_TOKEN=your_token_here
     "--include-completed", "-c", is_flag=True, help="Include completed tasks in export"
 )
 @click.option("--no-comments", is_flag=True, help="Skip exporting task comments")
-@click.option(
-    "--no-project-folders",
-    is_flag=True,
-    help="Don't create separate folders for each project",
-)
 @click.option(
     "--tag-prefix",
     default="todoist",
@@ -349,7 +334,6 @@ def schedule(
     project_name: str | None,
     include_completed: bool,
     no_comments: bool,
-    no_project_folders: bool,
     tag_prefix: str,
     filter: str | None,
     interval: int,
@@ -369,7 +353,6 @@ def schedule(
     # Configure export
     config = ExportConfig(
         output_dir=output_dir,
-        create_project_folders=not no_project_folders,
         include_completed=include_completed,
         include_comments=not no_comments,
         tag_prefix=tag_prefix,

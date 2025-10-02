@@ -26,7 +26,6 @@ class TestScheduledSync:
         """Create test export configuration."""
         return ExportConfig(
             output_dir=tmp_path,
-            create_project_folders=False,
             include_completed=False,
             include_comments=True,
             tag_prefix="test",

@@ -149,8 +149,8 @@ All export options plus:
 **Examples:**
 
 ```bash
-# Schedule sync every 30 minutes
-todoist-to-notes schedule --interval 30
+# Schedule sync every 1 hour
+todoist-to-notes schedule --interval 60
 
 # Schedule daily sync at 8:30 AM
 todoist-to-notes schedule --time "08:30"

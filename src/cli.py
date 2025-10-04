@@ -331,8 +331,8 @@ TODOIST_API_TOKEN=your_token_here
 @click.option(
     "--interval",
     type=int,
-    default=15,
-    help="Sync interval in minutes (default: 15)",
+    default=60,
+    help="Sync interval in minutes (default: 60)",
 )
 @click.option(
     "--time",

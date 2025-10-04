@@ -1,11 +1,14 @@
-"""Todoist API client for fetching tasks and projects."""
+"""Todoist API client using the official todoist-api-python library."""
 
 import logging
 import os
 from typing import Any
 
-import requests
 from pydantic import BaseModel, Field
+from todoist_api_python.api import TodoistAPI
+from todoist_api_python.models import Comment as TodoistAPIComment
+from todoist_api_python.models import Project as TodoistAPIProject
+from todoist_api_python.models import Task as TodoistAPITask
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +21,17 @@ class TodoistProject(BaseModel):
     color: str
     is_shared: bool = False
     url: str = ""
+
+    @classmethod
+    def from_api_project(cls, api_project: TodoistAPIProject) -> "TodoistProject":
+        """Create TodoistProject from the API project object."""
+        return cls(
+            id=api_project.id,
+            name=api_project.name,
+            color=api_project.color,
+            is_shared=api_project.is_shared,
+            url=api_project.url,
+        )
 
 
 class TodoistTask(BaseModel):
@@ -55,6 +69,40 @@ class TodoistTask(BaseModel):
         priority_map = {4: "High", 3: "Medium", 2: "Low", 1: "None"}
         return priority_map.get(self.priority, "None")
 
+    @classmethod
+    def from_api_task(cls, api_task: TodoistAPITask) -> "TodoistTask":
+        """Create TodoistTask from the API task object."""
+        # Convert due object to dict if present
+        due_dict = None
+        if api_task.due:
+            due_dict = {
+                "date": api_task.due.date,
+                "string": getattr(api_task.due, "string", ""),
+                "datetime": getattr(api_task.due, "datetime", None),
+                "timezone": getattr(api_task.due, "timezone", None),
+                "is_recurring": getattr(api_task.due, "is_recurring", False),
+            }
+
+        return cls(
+            id=api_task.id,
+            content=api_task.content,
+            description=api_task.description or "",
+            project_id=api_task.project_id,
+            section_id=api_task.section_id,
+            parent_id=api_task.parent_id,
+            order=api_task.order,
+            priority=api_task.priority,
+            labels=api_task.labels or [],
+            due=due_dict,
+            url=api_task.url,
+            comment_count=0,  # Not available in REST API v2
+            is_completed=False,  # Tasks from get_tasks() are always active
+            created_at=str(api_task.created_at),
+            creator_id=api_task.creator_id or "",
+            assignee_id=api_task.assignee_id,
+            assigner_id=api_task.assigner_id,
+        )
+
 
 class TodoistComment(BaseModel):
     """Represents a comment on a Todoist task."""
@@ -65,6 +113,27 @@ class TodoistComment(BaseModel):
     posted_at: str
     attachment: dict[str, Any] | None = None
 
+    @classmethod
+    def from_api_comment(cls, api_comment: TodoistAPIComment) -> "TodoistComment":
+        """Create TodoistComment from the API comment object."""
+        # Convert attachment if present
+        attachment_dict = None
+        if hasattr(api_comment, "attachment") and api_comment.attachment:
+            attachment_dict = {
+                "file_name": getattr(api_comment.attachment, "file_name", None),
+                "file_type": getattr(api_comment.attachment, "file_type", None),
+                "file_url": getattr(api_comment.attachment, "file_url", None),
+                "resource_type": getattr(api_comment.attachment, "resource_type", None),
+            }
+
+        return cls(
+            id=api_comment.id,
+            task_id=getattr(api_comment, "task_id", ""),
+            content=api_comment.content,
+            posted_at=str(getattr(api_comment, "posted_at", "")),
+            attachment=attachment_dict,
+        )
+
 
 class TodoistAPIError(Exception):
     """Custom exception for Todoist API errors."""
@@ -73,9 +142,7 @@ class TodoistAPIError(Exception):
 
 
 class TodoistClient:
-    """Client for interacting with the Todoist REST API."""
-
-    BASE_URL: str = "https://api.todoist.com/rest/v2"
+    """Client for interacting with the Todoist REST API using the official library."""
 
     def __init__(self, api_token: str | None = None):
         """Initialize the Todoist client.
@@ -90,50 +157,35 @@ class TodoistClient:
                 + "environment variable or pass it directly to the constructor."
             )
 
-        self.headers: dict[str, str] = {
-            "Authorization": f"Bearer {self.api_token}",
-            "Content-Type": "application/json",
-        }
-        self.session: requests.Session = requests.Session()
-        self.session.headers.update(self.headers)
-
-    def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> Any:
-        """Make a request to the Todoist API.
-
-        Args:
-            method: HTTP method
-            endpoint: API endpoint (without base URL)
-            **kwargs: Additional arguments to pass to requests
-
-        Returns:
-            JSON response data
-
-        Raises:
-            TodoistAPIError: If the API request fails
-        """
-        url = f"{self.BASE_URL}/{endpoint.lstrip('/')}"
-
         try:
-            response = self.session.request(method, url, **kwargs)
-            response.raise_for_status()
-
-            if response.status_code == 204:  # No content
-                return None
-
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed: {e}")
-            raise TodoistAPIError(f"Failed to make request to {url}: {e}") from e
+            self._api = TodoistAPI(self.api_token)
+        except Exception as e:
+            logger.error(f"Failed to initialize Todoist API client: {e}")
+            raise TodoistAPIError(
+                f"Failed to initialize Todoist API client: {e}"
+            ) from e
 
     def get_projects(self) -> list[TodoistProject]:
         """Fetch all projects.
 
         Returns:
             List of TodoistProject objects
+
+        Raises:
+            TodoistAPIError: If the API request fails
         """
-        logger.info("Fetching projects from Todoist")
-        data = self._make_request("GET", "/projects")
-        return [TodoistProject(**project) for project in data]
+        try:
+            logger.info("Fetching projects from Todoist")
+            api_projects_paginator = self._api.get_projects()
+            # Convert paginator to list by iterating through all results
+            all_projects = []
+            for projects_page in api_projects_paginator:
+                for project in projects_page:
+                    all_projects.append(TodoistProject.from_api_project(project))
+            return all_projects
+        except Exception as e:
+            logger.error(f"Failed to fetch projects: {e}")
+            raise TodoistAPIError(f"Failed to fetch projects: {e}") from e
 
     def get_tasks(
         self, project_id: str | None = None, filter_expr: str | None = None
@@ -146,16 +198,38 @@ class TodoistClient:
 
         Returns:
             List of TodoistTask objects
-        """
-        params = {}
-        if project_id:
-            params["project_id"] = project_id
-        if filter_expr:
-            params["filter"] = filter_expr
 
-        logger.info(f"Fetching tasks from Todoist with params: {params}")
-        data = self._make_request("GET", "/tasks", params=params)
-        return [TodoistTask(**task) for task in data]
+        Raises:
+            TodoistAPIError: If the API request fails
+        """
+        try:
+            params = {}
+            if project_id:
+                params["project_id"] = project_id
+            if filter_expr:
+                params["filter"] = filter_expr
+
+            logger.info(f"Fetching tasks from Todoist with params: {params}")
+
+            if filter_expr:
+                # Use the filter_tasks method for filter expressions
+                api_tasks_paginator = self._api.filter_tasks(query=filter_expr)
+            elif project_id:
+                # Use the project_id parameter
+                api_tasks_paginator = self._api.get_tasks(project_id=project_id)
+            else:
+                # Get all tasks
+                api_tasks_paginator = self._api.get_tasks()
+
+            # Convert paginator to list by iterating through all results
+            all_tasks = []
+            for tasks_page in api_tasks_paginator:
+                for task in tasks_page:
+                    all_tasks.append(TodoistTask.from_api_task(task))
+            return all_tasks
+        except Exception as e:
+            logger.error(f"Failed to fetch tasks: {e}")
+            raise TodoistAPIError(f"Failed to fetch tasks: {e}") from e
 
     def get_task_comments(self, task_id: str) -> list[TodoistComment]:
         """Fetch comments for a specific task.
@@ -165,10 +239,26 @@ class TodoistClient:
 
         Returns:
             List of TodoistComment objects
+
+        Raises:
+            TodoistAPIError: If the API request fails
         """
-        logger.info(f"Fetching comments for task {task_id}")
-        data = self._make_request("GET", f"/comments?task_id={task_id}")
-        return [TodoistComment(**comment) for comment in data]
+        try:
+            logger.info(f"Fetching comments for task {task_id}")
+            # The get_comments method returns an iterator that yields pages of comments
+            comments_iterator = self._api.get_comments(task_id=task_id)
+
+            all_comments = []
+            for comments_page in comments_iterator:
+                for comment in comments_page:
+                    all_comments.append(TodoistComment.from_api_comment(comment))
+
+            return all_comments
+        except Exception as e:
+            logger.error(f"Failed to fetch comments for task {task_id}: {e}")
+            raise TodoistAPIError(
+                f"Failed to fetch comments for task {task_id}: {e}"
+            ) from e
 
     def get_completed_tasks(
         self,
@@ -181,19 +271,33 @@ class TodoistClient:
 
         Returns:
             List of completed TodoistTask objects
-        """
-        # Note: This requires the sync API endpoint which has different
-        # authentication. For now, we'll use a filter to get completed tasks
-        # from today
-        filter_expr = "completed today"
-        if project_id:
-            # Get project name first to build filter
-            projects = self.get_projects()
-            project_name = next((p.name for p in projects if p.id == project_id), None)
-            if project_name:
-                filter_expr = f"completed today & #{project_name}"
 
-        return self.get_tasks(filter_expr=filter_expr)
+        Note:
+            This uses a filter expression to get completed tasks from today.
+            The official API doesn't provide a direct method for completed tasks
+            in the REST API v2.
+        """
+        try:
+            filter_expr = "completed today"
+            if project_id:
+                # Get project name first to build filter
+                projects = self.get_projects()
+                project_name = next(
+                    (p.name for p in projects if p.id == project_id), None
+                )
+                if project_name:
+                    filter_expr = f"completed today & #{project_name}"
+
+            # Use filter_tasks method for completed tasks
+            api_tasks_paginator = self._api.filter_tasks(query=filter_expr)
+            all_tasks = []
+            for tasks_page in api_tasks_paginator:
+                for task in tasks_page:
+                    all_tasks.append(TodoistTask.from_api_task(task))
+            return all_tasks
+        except Exception as e:
+            logger.error(f"Failed to fetch completed tasks: {e}")
+            raise TodoistAPIError(f"Failed to fetch completed tasks: {e}") from e
 
     def test_connection(self) -> bool:
         """Test the API connection and authentication.

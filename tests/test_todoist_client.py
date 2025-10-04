@@ -3,7 +3,6 @@
 from unittest.mock import Mock, patch
 
 import pytest
-import requests
 
 from src.todoist_client import (
     TodoistAPIError,
@@ -84,23 +83,99 @@ class TestTodoistModels:
         assert comment.task_id == "456"
         assert comment.content == "This is a comment"
 
+    def test_todoist_project_from_api_project(self):
+        """Test creating TodoistProject from API project object."""
+        # Mock API project object
+        api_project = Mock()
+        api_project.id = "123"
+        api_project.name = "Test Project"
+        api_project.color = "red"
+        api_project.is_shared = False
+        api_project.url = "https://todoist.com/showProject?id=123"
+
+        project = TodoistProject.from_api_project(api_project)
+        assert project.id == "123"
+        assert project.name == "Test Project"
+        assert project.color == "red"
+        assert project.is_shared is False
+        assert project.url == "https://todoist.com/showProject?id=123"
+
+    def test_todoist_task_from_api_task(self):
+        """Test creating TodoistTask from API task object."""
+        # Mock API task object
+        api_task = Mock()
+        api_task.id = "456"
+        api_task.content = "Test Task"
+        api_task.description = "Test description"
+        api_task.project_id = "123"
+        api_task.section_id = None
+        api_task.parent_id = None
+        api_task.order = 1
+        api_task.priority = 3
+        api_task.labels = ["urgent", "work"]
+        api_task.url = "https://todoist.com/showTask?id=456"
+        api_task.comment_count = 2
+        api_task.is_completed = False
+        api_task.created_at = "2024-01-10T10:00:00Z"
+        api_task.creator_id = "user123"
+        api_task.assignee_id = None
+        api_task.assigner_id = None
+
+        # Mock due object
+        api_task.due = Mock()
+        api_task.due.date = "2024-01-15"
+        api_task.due.string = "tomorrow"
+        api_task.due.datetime = None
+        api_task.due.timezone = None
+        api_task.due.is_recurring = False
+
+        task = TodoistTask.from_api_task(api_task)
+        assert task.id == "456"
+        assert task.content == "Test Task"
+        assert task.priority == 3
+        assert task.due_date == "2024-01-15"
+
+    def test_todoist_comment_from_api_comment(self):
+        """Test creating TodoistComment from API comment object."""
+        # Mock API comment object
+        api_comment = Mock()
+        api_comment.id = "789"
+        api_comment.task_id = "456"
+        api_comment.content = "This is a comment"
+        api_comment.posted_at = "2024-01-11T15:30:00Z"
+        api_comment.attachment = None
+
+        comment = TodoistComment.from_api_comment(api_comment)
+        assert comment.id == "789"
+        assert comment.task_id == "456"
+        assert comment.content == "This is a comment"
+        assert comment.posted_at == "2024-01-11T15:30:00Z"
+        assert comment.attachment is None
+
 
 class TestTodoistClient:
     """Test TodoistClient functionality."""
 
     @patch.dict("os.environ", {"TODOIST_API_TOKEN": "test_token"})
-    def test_client_initialization_with_env_var(self):
+    @patch("src.todoist_client.TodoistAPI")
+    def test_client_initialization_with_env_var(self, mock_api_class):
         """Test client initialization with environment variable."""
+        mock_api_instance = Mock()
+        mock_api_class.return_value = mock_api_instance
+
         client = TodoistClient()
         assert client.api_token == "test_token"
-        assert "Authorization" in client.headers
-        assert client.headers["Authorization"] == "Bearer test_token"
+        mock_api_class.assert_called_once_with("test_token")
 
-    def test_client_initialization_with_token(self):
+    @patch("src.todoist_client.TodoistAPI")
+    def test_client_initialization_with_token(self, mock_api_class):
         """Test client initialization with direct token."""
+        mock_api_instance = Mock()
+        mock_api_class.return_value = mock_api_instance
+
         client = TodoistClient(api_token="direct_token")
         assert client.api_token == "direct_token"
-        assert client.headers["Authorization"] == "Bearer direct_token"
+        mock_api_class.assert_called_once_with("direct_token")
 
     def test_client_initialization_no_token(self):
         """Test client initialization fails without token."""
@@ -110,139 +185,159 @@ class TestTodoistClient:
         ):
             TodoistClient()
 
+    @patch("src.todoist_client.TodoistAPI")
+    def test_client_initialization_api_failure(self, mock_api_class):
+        """Test client initialization fails when API initialization fails."""
+        mock_api_class.side_effect = Exception("API initialization failed")
+
+        with pytest.raises(
+            TodoistAPIError, match="Failed to initialize Todoist API client"
+        ):
+            TodoistClient(api_token="test_token")
+
     @pytest.fixture
     def mock_client(self):
         """Create a mock client for testing."""
-        return TodoistClient(api_token="test_token")
-
-    def test_make_request_success(self, mock_client):
-        """Test successful API request."""
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"test": "data"}
-
-        with patch.object(mock_client.session, "request", return_value=mock_response):
-            result = mock_client._make_request("GET", "/test")
-            assert result == {"test": "data"}
-
-    def test_make_request_no_content(self, mock_client):
-        """Test API request with 204 No Content response."""
-        mock_response = Mock()
-        mock_response.status_code = 204
-
-        with patch.object(mock_client.session, "request", return_value=mock_response):
-            result = mock_client._make_request("GET", "/test")
-            assert result is None
-
-    def test_make_request_failure(self, mock_client):
-        """Test failed API request."""
-        with (
-            patch.object(
-                mock_client.session,
-                "request",
-                side_effect=requests.exceptions.RequestException("Network error"),
-            ),
-            pytest.raises(TodoistAPIError, match="Failed to make request"),
-        ):
-            mock_client._make_request("GET", "/test")
+        with patch("src.todoist_client.TodoistAPI") as mock_api_class:
+            mock_api_instance = Mock()
+            mock_api_class.return_value = mock_api_instance
+            client = TodoistClient(api_token="test_token")
+            client._api = mock_api_instance
+            return client
 
     def test_get_projects(self, mock_client):
         """Test getting projects."""
-        mock_projects_data = [
-            {
-                "id": "123",
-                "name": "Project 1",
-                "color": "red",
-                "is_shared": False,
-                "url": "",
-            },
-            {
-                "id": "456",
-                "name": "Project 2",
-                "color": "blue",
-                "is_shared": True,
-                "url": "",
-            },
-        ]
+        # Mock API project objects
+        mock_project = Mock()
+        mock_project.id = "123"
+        mock_project.name = "Project 1"
+        mock_project.color = "red"
+        mock_project.is_shared = False
+        mock_project.url = ""
 
-        with patch.object(
-            mock_client, "_make_request", return_value=mock_projects_data
-        ):
-            projects = mock_client.get_projects()
-            assert len(projects) == 2
-            assert isinstance(projects[0], TodoistProject)
-            assert projects[0].name == "Project 1"
-            assert projects[1].is_shared is True
+        # Mock the paginator by making it iterable with pages of projects
+        mock_client._api.get_projects.return_value = iter([[mock_project]])
+
+        projects = mock_client.get_projects()
+        assert len(projects) == 1
+        assert isinstance(projects[0], TodoistProject)
+        assert projects[0].name == "Project 1"
+
+    def test_get_projects_failure(self, mock_client):
+        """Test getting projects with API failure."""
+        mock_client._api.get_projects.side_effect = Exception("API Error")
+
+        with pytest.raises(TodoistAPIError, match="Failed to fetch projects"):
+            mock_client.get_projects()
 
     def test_get_tasks(self, mock_client):
         """Test getting tasks."""
-        mock_tasks_data = [
-            {
-                "id": "789",
-                "content": "Task 1",
-                "description": "",
-                "project_id": "123",
-                "order": 1,
-                "priority": 1,
-                "labels": [],
-                "comment_count": 0,
-                "is_completed": False,
-                "created_at": "2024-01-10T10:00:00Z",
-                "url": "",
-                "creator_id": "",
-            }
-        ]
+        # Mock API task object
+        mock_task = Mock()
+        mock_task.id = "789"
+        mock_task.content = "Task 1"
+        mock_task.description = ""
+        mock_task.project_id = "123"
+        mock_task.section_id = None
+        mock_task.parent_id = None
+        mock_task.order = 1
+        mock_task.priority = 1
+        mock_task.labels = []
+        mock_task.due = None
+        mock_task.url = ""
+        mock_task.comment_count = 0
+        mock_task.is_completed = False
+        mock_task.created_at = "2024-01-10T10:00:00Z"
+        mock_task.creator_id = ""
+        mock_task.assignee_id = None
+        mock_task.assigner_id = None
 
-        with patch.object(mock_client, "_make_request", return_value=mock_tasks_data):
-            tasks = mock_client.get_tasks()
-            assert len(tasks) == 1
-            assert isinstance(tasks[0], TodoistTask)
-            assert tasks[0].content == "Task 1"
+        # Mock the paginator by making it iterable with pages of tasks
+        mock_client._api.get_tasks.return_value = iter([[mock_task]])
+
+        tasks = mock_client.get_tasks()
+        assert len(tasks) == 1
+        assert isinstance(tasks[0], TodoistTask)
+        assert tasks[0].content == "Task 1"
 
     def test_get_tasks_with_project_filter(self, mock_client):
         """Test getting tasks filtered by project."""
-        with patch.object(
-            mock_client, "_make_request", return_value=[]
-        ) as mock_request:
-            mock_client.get_tasks(project_id="123")
-            mock_request.assert_called_once_with(
-                "GET", "/tasks", params={"project_id": "123"}
-            )
+        mock_client._api.get_tasks.return_value = iter([[]])
+
+        mock_client.get_tasks(project_id="123")
+        mock_client._api.get_tasks.assert_called_once_with(project_id="123")
 
     def test_get_tasks_with_filter_expression(self, mock_client):
         """Test getting tasks with filter expression."""
-        with patch.object(
-            mock_client, "_make_request", return_value=[]
-        ) as mock_request:
-            mock_client.get_tasks(filter_expr="today")
-            mock_request.assert_called_once_with(
-                "GET", "/tasks", params={"filter": "today"}
-            )
+        mock_client._api.filter_tasks.return_value = iter([[]])
+
+        mock_client.get_tasks(filter_expr="today")
+        mock_client._api.filter_tasks.assert_called_once_with(query="today")
+
+    def test_get_tasks_failure(self, mock_client):
+        """Test getting tasks with API failure."""
+        mock_client._api.get_tasks.side_effect = Exception("API Error")
+
+        with pytest.raises(TodoistAPIError, match="Failed to fetch tasks"):
+            mock_client.get_tasks()
 
     def test_get_task_comments(self, mock_client):
         """Test getting task comments."""
-        mock_comments_data = [
-            {
-                "id": "comment1",
-                "task_id": "789",
-                "content": "First comment",
-                "posted_at": "2024-01-11T10:00:00Z",
-            },
-            {
-                "id": "comment2",
-                "task_id": "789",
-                "content": "Second comment",
-                "posted_at": "2024-01-11T11:00:00Z",
-            },
-        ]
+        # Mock API comment object
+        mock_comment = Mock()
+        mock_comment.id = "comment1"
+        mock_comment.task_id = "789"
+        mock_comment.content = "First comment"
+        mock_comment.posted_at = "2024-01-11T10:00:00Z"
+        mock_comment.attachment = None
+
+        # Mock the iterator that yields pages of comments
+        mock_client._api.get_comments.return_value = [[mock_comment]]
+
+        comments = mock_client.get_task_comments("789")
+        assert len(comments) == 1
+        assert isinstance(comments[0], TodoistComment)
+        assert comments[0].content == "First comment"
+
+    def test_get_task_comments_failure(self, mock_client):
+        """Test getting task comments with API failure."""
+        mock_client._api.get_comments.side_effect = Exception("API Error")
+
+        with pytest.raises(TodoistAPIError, match="Failed to fetch comments for task"):
+            mock_client.get_task_comments("789")
+
+    def test_get_completed_tasks(self, mock_client):
+        """Test getting completed tasks."""
+        mock_client._api.filter_tasks.return_value = iter([[]])
+
+        # Mock get_projects for project name lookup
+        with patch.object(mock_client, "get_projects", return_value=[]):
+            mock_client.get_completed_tasks()
+            mock_client._api.filter_tasks.assert_called_once_with(
+                query="completed today"
+            )
+
+    def test_get_completed_tasks_with_project(self, mock_client):
+        """Test getting completed tasks with project filter."""
+        # Mock project with proper attributes
+        mock_project = Mock()
+        mock_project.id = "123"
+        mock_project.name = "Test Project"
+        mock_project.color = "red"
+        mock_project.is_shared = False
+        mock_project.url = ""
+
+        mock_client._api.filter_tasks.return_value = iter([[]])
 
         with patch.object(
-            mock_client, "_make_request", return_value=mock_comments_data
+            mock_client,
+            "get_projects",
+            return_value=[TodoistProject.from_api_project(mock_project)],
         ):
-            comments = mock_client.get_task_comments("789")
-            assert len(comments) == 2
-            assert isinstance(comments[0], TodoistComment)
-            assert comments[0].content == "First comment"
+            mock_client.get_completed_tasks(project_id="123")
+            mock_client._api.filter_tasks.assert_called_once_with(
+                query="completed today & #Test Project"
+            )
 
     def test_test_connection_success(self, mock_client):
         """Test successful connection test."""
@@ -262,32 +357,14 @@ class TestTodoistClient:
 class TestTodoistClientIntegration:
     """Integration tests for TodoistClient (requires network/mocking)."""
 
-    def test_url_construction(self):
-        """Test that URLs are constructed correctly."""
-        client = TodoistClient(api_token="test")
+    @patch("src.todoist_client.TodoistAPI")
+    def test_api_initialization(self, mock_api_class):
+        """Test that the API is initialized correctly."""
+        mock_api_instance = Mock()
+        mock_api_class.return_value = mock_api_instance
 
-        # Test that the base URL is used correctly
-        with patch.object(client.session, "request") as mock_request:
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = []
-            mock_request.return_value = mock_response
-
-            client._make_request("GET", "/projects")
-
-            # Check that the full URL was constructed correctly
-            args, kwargs = mock_request.call_args
-            assert args[1] == "https://api.todoist.com/rest/v2/projects"
-
-    def test_headers_are_set(self):
-        """Test that headers are set correctly."""
         client = TodoistClient(api_token="test_token")
 
-        expected_headers = {
-            "Authorization": "Bearer test_token",
-            "Content-Type": "application/json",
-        }
-
-        for key, value in expected_headers.items():
-            assert client.headers[key] == value
-            assert client.session.headers[key] == value
+        # Check that the API was initialized with the correct token
+        mock_api_class.assert_called_once_with("test_token")
+        assert client._api == mock_api_instance

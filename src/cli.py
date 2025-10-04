@@ -200,12 +200,14 @@ def export(
         should_include_comments = True
         if no_comments:
             should_include_comments = False
-        elif os.getenv("EXPORT_INCLUDE_COMMENTS"):
-            should_include_comments = os.getenv("EXPORT_INCLUDE_COMMENTS").lower() in (
-                "true",
-                "1",
-                "yes",
-            )
+        else:
+            env_value = os.getenv("EXPORT_INCLUDE_COMMENTS")
+            if env_value:
+                should_include_comments = env_value.lower() in (
+                    "true",
+                    "1",
+                    "yes",
+                )
 
         # Configure exporter
         config = ExportConfig(

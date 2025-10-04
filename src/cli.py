@@ -12,7 +12,6 @@ if TYPE_CHECKING:
 import click
 from dotenv import load_dotenv
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
@@ -35,7 +34,6 @@ def setup_logging(verbose: bool = False) -> None:
         level=level,
         format="%(message)s",
         datefmt="[%X]",
-        handlers=[RichHandler(console=console, rich_tracebacks=True)],
     )
 
 

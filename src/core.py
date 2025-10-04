@@ -53,6 +53,19 @@ def export_tasks_internal(
     # Get tasks
     tasks = client.get_tasks(project_id=target_project_id, filter_expr=filter_expr)
 
+    # Get completed tasks if requested
+    if include_completed:
+        try:
+            completed_tasks = client.get_completed_tasks(project_id=target_project_id)
+            # Merge completed tasks with regular tasks, avoiding duplicates
+            task_ids = {task.id for task in tasks}
+            for completed_task in completed_tasks:
+                if completed_task.id not in task_ids:
+                    tasks.append(completed_task)
+            logger.info(f"Added {len(completed_tasks)} completed tasks")
+        except TodoistAPIError as e:
+            logger.warning(f"Failed to fetch completed tasks: {e}")
+
     if not tasks:
         logger.info("No tasks found matching the specified criteria")
         return 0

@@ -1,6 +1,7 @@
 """Command-line interface for Todoist to Obsidian Notes exporter."""
 
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -137,8 +138,9 @@ def list_projects(api_token: str | None) -> None:
     "--output-dir",
     "-o",
     type=click.Path(path_type=Path),
+    envvar="EXPORT_OUTPUT_DIR",
     default=Path.cwd() / "obsidian_export",
-    help="Output directory for exported notes",
+    help="Output directory for exported notes (or set EXPORT_OUTPUT_DIR env var)",
 )
 @click.option(
     "--api-token",
@@ -149,9 +151,17 @@ def list_projects(api_token: str | None) -> None:
 @click.option("--project-id", "-p", help="Export only tasks from specific project ID")
 @click.option("--project-name", help="Export only tasks from specific project name")
 @click.option(
-    "--include-completed", "-c", is_flag=True, help="Include completed tasks in export"
+    "--include-completed",
+    "-c",
+    is_flag=True,
+    envvar="EXPORT_INCLUDE_COMPLETED",
+    help="Include completed tasks in export (or set EXPORT_INCLUDE_COMPLETED env var)",
 )
-@click.option("--no-comments", is_flag=True, help="Skip exporting task comments")
+@click.option(
+    "--no-comments",
+    is_flag=True,
+    help="Skip exporting task comments",
+)
 @click.option(
     "--tag-prefix",
     default="todoist",
@@ -185,11 +195,23 @@ def export(
         # Initialize client
         client = TodoistClient(api_token)
 
+        # Determine include_comments logic
+        # Priority: --no-comments flag > EXPORT_INCLUDE_COMMENTS env var > default (True)
+        should_include_comments = True
+        if no_comments:
+            should_include_comments = False
+        elif os.getenv("EXPORT_INCLUDE_COMMENTS"):
+            should_include_comments = os.getenv("EXPORT_INCLUDE_COMMENTS").lower() in (
+                "true",
+                "1",
+                "yes",
+            )
+
         # Configure exporter
         config = ExportConfig(
             output_dir=output_dir,
             include_completed=include_completed,
-            include_comments=not no_comments,
+            include_comments=should_include_comments,
             tag_prefix=tag_prefix,
         )
 

@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -70,7 +71,9 @@ class TodoistTask(BaseModel):
         return priority_map.get(self.priority, "None")
 
     @classmethod
-    def from_api_task(cls, api_task: TodoistAPITask) -> "TodoistTask":
+    def from_api_task(
+        cls, api_task: TodoistAPITask, is_completed: bool = False
+    ) -> "TodoistTask":
         """Create TodoistTask from the API task object."""
         # Convert due object to dict if present
         due_dict = None
@@ -96,7 +99,7 @@ class TodoistTask(BaseModel):
             due=due_dict,
             url=api_task.url,
             comment_count=0,  # Not available in REST API v2
-            is_completed=False,  # Tasks from get_tasks() are always active
+            is_completed=is_completed,  # Can be set based on API source
             created_at=str(api_task.created_at),
             creator_id=api_task.creator_id or "",
             assignee_id=api_task.assignee_id,
@@ -273,12 +276,18 @@ class TodoistClient:
             List of completed TodoistTask objects
 
         Note:
-            This uses a filter expression to get completed tasks from today.
-            The official API doesn't provide a direct method for completed tasks
-            in the REST API v2.
+            This fetches completed tasks from today using the official
+            get_completed_tasks_by_completion_date API method.
         """
         try:
-            filter_expr = "completed today"
+            # Get tasks completed today
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            tomorrow = today + timedelta(days=1)
+
+            logger.info(f"Fetching completed tasks from {today} to {tomorrow}")
+
+            # Build filter query if project_id is specified
+            filter_query = None
             if project_id:
                 # Get project name first to build filter
                 projects = self.get_projects()
@@ -286,14 +295,19 @@ class TodoistClient:
                     (p.name for p in projects if p.id == project_id), None
                 )
                 if project_name:
-                    filter_expr = f"completed today & #{project_name}"
+                    filter_query = f"#{project_name}"
 
-            # Use filter_tasks method for completed tasks
-            api_tasks_paginator = self._api.filter_tasks(query=filter_expr)
+            # Use the official completed tasks API
+            api_tasks_paginator = self._api.get_completed_tasks_by_completion_date(
+                since=today, until=tomorrow, filter_query=filter_query
+            )
+
             all_tasks = []
             for tasks_page in api_tasks_paginator:
                 for task in tasks_page:
-                    all_tasks.append(TodoistTask.from_api_task(task))
+                    # Mark these tasks as completed since they come from completed tasks API
+                    task_data = TodoistTask.from_api_task(task, is_completed=True)
+                    all_tasks.append(task_data)
             return all_tasks
         except Exception as e:
             logger.error(f"Failed to fetch completed tasks: {e}")

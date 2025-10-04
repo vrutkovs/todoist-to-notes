@@ -77,6 +77,7 @@ class TestTodoistModels:
             "task_id": "456",
             "content": "This is a comment",
             "posted_at": "2024-01-11T15:30:00Z",
+            "attachment": None,
         }
         comment = TodoistComment(**data)
         assert comment.id == "789"
@@ -308,14 +309,21 @@ class TestTodoistClient:
 
     def test_get_completed_tasks(self, mock_client):
         """Test getting completed tasks."""
-        mock_client._api.filter_tasks.return_value = iter([[]])
+        mock_client._api.get_completed_tasks_by_completion_date.return_value = iter(
+            [[]]
+        )
 
         # Mock get_projects for project name lookup
         with patch.object(mock_client, "get_projects", return_value=[]):
             mock_client.get_completed_tasks()
-            mock_client._api.filter_tasks.assert_called_once_with(
-                query="completed today"
+            # Verify the method was called with datetime parameters
+            mock_client._api.get_completed_tasks_by_completion_date.assert_called_once()
+            call_args = (
+                mock_client._api.get_completed_tasks_by_completion_date.call_args
             )
+            assert call_args.kwargs["filter_query"] is None
+            assert "since" in call_args.kwargs
+            assert "until" in call_args.kwargs
 
     def test_get_completed_tasks_with_project(self, mock_client):
         """Test getting completed tasks with project filter."""
@@ -327,7 +335,9 @@ class TestTodoistClient:
         mock_project.is_shared = False
         mock_project.url = ""
 
-        mock_client._api.filter_tasks.return_value = iter([[]])
+        mock_client._api.get_completed_tasks_by_completion_date.return_value = iter(
+            [[]]
+        )
 
         with patch.object(
             mock_client,
@@ -335,9 +345,13 @@ class TestTodoistClient:
             return_value=[TodoistProject.from_api_project(mock_project)],
         ):
             mock_client.get_completed_tasks(project_id="123")
-            mock_client._api.filter_tasks.assert_called_once_with(
-                query="completed today & #Test Project"
+            # Verify the method was called with project filter
+            call_args = (
+                mock_client._api.get_completed_tasks_by_completion_date.call_args
             )
+            assert call_args.kwargs["filter_query"] == "#Test Project"
+            assert "since" in call_args.kwargs
+            assert "until" in call_args.kwargs
 
     def test_test_connection_success(self, mock_client):
         """Test successful connection test."""

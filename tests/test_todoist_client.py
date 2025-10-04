@@ -153,6 +153,51 @@ class TestTodoistModels:
         assert comment.posted_at == "2024-01-11T15:30:00Z"
         assert comment.attachment is None
 
+    def test_todoist_comment_from_api_comment_with_null_task_id(self):
+        """Test creating TodoistComment from API comment object with null task_id (project comment)."""
+        # Mock API comment object for project comment
+        api_comment = Mock()
+        api_comment.id = "789"
+        api_comment.task_id = None  # Project comments have null task_id
+        api_comment.content = "This is a project comment"
+        api_comment.posted_at = "2024-01-11T15:30:00Z"
+        api_comment.attachment = None
+
+        comment = TodoistComment.from_api_comment(api_comment)
+        assert comment.id == "789"
+        assert comment.task_id == ""  # Should convert None to empty string
+        assert comment.content == "This is a project comment"
+        assert comment.posted_at == "2024-01-11T15:30:00Z"
+        assert comment.attachment is None
+
+    def test_todoist_comment_from_api_comment_with_attachment(self):
+        """Test creating TodoistComment from API comment object with attachment."""
+        # Mock API comment object with attachment
+        api_comment = Mock()
+        api_comment.id = "789"
+        api_comment.task_id = "456"
+        api_comment.content = "This is a comment with attachment"
+        api_comment.posted_at = "2024-01-11T15:30:00Z"
+
+        # Mock attachment
+        mock_attachment = Mock()
+        mock_attachment.file_name = "document.pdf"
+        mock_attachment.file_type = "application/pdf"
+        mock_attachment.file_url = "https://example.com/document.pdf"
+        mock_attachment.resource_type = "file"
+        api_comment.attachment = mock_attachment
+
+        comment = TodoistComment.from_api_comment(api_comment)
+        assert comment.id == "789"
+        assert comment.task_id == "456"
+        assert comment.content == "This is a comment with attachment"
+        assert comment.posted_at == "2024-01-11T15:30:00Z"
+        assert comment.attachment is not None
+        assert comment.attachment["file_name"] == "document.pdf"
+        assert comment.attachment["file_type"] == "application/pdf"
+        assert comment.attachment["file_url"] == "https://example.com/document.pdf"
+        assert comment.attachment["resource_type"] == "file"
+
 
 class TestTodoistClient:
     """Test TodoistClient functionality."""
@@ -299,6 +344,8 @@ class TestTodoistClient:
         assert len(comments) == 1
         assert isinstance(comments[0], TodoistComment)
         assert comments[0].content == "First comment"
+        assert comments[0].task_id == "789"
+        assert comments[0].posted_at == "2024-01-11T10:00:00Z"
 
     def test_get_task_comments_failure(self, mock_client):
         """Test getting task comments with API failure."""
@@ -306,6 +353,79 @@ class TestTodoistClient:
 
         with pytest.raises(TodoistAPIError, match="Failed to fetch comments for task"):
             mock_client.get_task_comments("789")
+
+    def test_get_task_comments_comprehensive(self, mock_client):
+        """Test comprehensive comment fetching with multiple comments and edge cases."""
+        # Mock multiple API comment objects
+        comment1 = Mock()
+        comment1.id = "comment1"
+        comment1.task_id = "789"
+        comment1.content = "First comment"
+        comment1.posted_at = "2024-01-11T10:00:00Z"
+        comment1.attachment = None
+
+        comment2 = Mock()
+        comment2.id = "comment2"
+        comment2.task_id = "789"
+        comment2.content = "Second comment with attachment"
+        comment2.posted_at = "2024-01-11T11:00:00Z"
+
+        # Mock attachment for second comment
+        mock_attachment = Mock()
+        mock_attachment.file_name = "document.pdf"
+        mock_attachment.file_type = "application/pdf"
+        mock_attachment.file_url = "https://example.com/document.pdf"
+        mock_attachment.resource_type = "file"
+        comment2.attachment = mock_attachment
+
+        comment3 = Mock()
+        comment3.id = "comment3"
+        comment3.task_id = None  # Project comment case
+        comment3.content = "Project comment"
+        comment3.posted_at = "2024-01-11T12:00:00Z"
+        comment3.attachment = None
+
+        # Mock the iterator that yields pages of comments
+        mock_client._api.get_comments.return_value = [[comment1, comment2], [comment3]]
+
+        comments = mock_client.get_task_comments("789")
+
+        # Verify we got all comments
+        assert len(comments) == 3
+
+        # Verify first comment
+        assert comments[0].id == "comment1"
+        assert comments[0].task_id == "789"
+        assert comments[0].content == "First comment"
+        assert comments[0].posted_at == "2024-01-11T10:00:00Z"
+        assert comments[0].attachment is None
+
+        # Verify second comment with attachment
+        assert comments[1].id == "comment2"
+        assert comments[1].task_id == "789"
+        assert comments[1].content == "Second comment with attachment"
+        assert comments[1].posted_at == "2024-01-11T11:00:00Z"
+        assert comments[1].attachment is not None
+        assert comments[1].attachment["file_name"] == "document.pdf"
+        assert comments[1].attachment["file_type"] == "application/pdf"
+        assert comments[1].attachment["file_url"] == "https://example.com/document.pdf"
+        assert comments[1].attachment["resource_type"] == "file"
+
+        # Verify third comment (project comment with None task_id)
+        assert comments[2].id == "comment3"
+        assert comments[2].task_id == ""  # Should be converted to empty string
+        assert comments[2].content == "Project comment"
+        assert comments[2].posted_at == "2024-01-11T12:00:00Z"
+        assert comments[2].attachment is None
+
+    def test_get_task_comments_empty_response(self, mock_client):
+        """Test getting task comments when no comments exist."""
+        # Mock empty iterator
+        mock_client._api.get_comments.return_value = [[]]
+
+        comments = mock_client.get_task_comments("789")
+        assert len(comments) == 0
+        assert isinstance(comments, list)
 
     def test_get_completed_tasks(self, mock_client):
         """Test getting completed tasks."""

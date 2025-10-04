@@ -49,7 +49,7 @@ class TodoistTask(BaseModel):
     labels: list[str] = Field(default_factory=list)
     due: dict[str, Any] | None = None
     url: str = ""
-    comment_count: int = 0
+
     is_completed: bool = False
     created_at: str
     creator_id: str = ""
@@ -98,7 +98,6 @@ class TodoistTask(BaseModel):
             labels=api_task.labels or [],
             due=due_dict,
             url=api_task.url,
-            comment_count=0,  # Not available in REST API v2
             is_completed=is_completed,  # Can be set based on API source
             created_at=str(api_task.created_at),
             creator_id=api_task.creator_id or "",
@@ -131,9 +130,9 @@ class TodoistComment(BaseModel):
 
         return cls(
             id=api_comment.id,
-            task_id=getattr(api_comment, "task_id", ""),
+            task_id=api_comment.task_id or "",
             content=api_comment.content,
-            posted_at=str(getattr(api_comment, "posted_at", "")),
+            posted_at=str(api_comment.posted_at),
             attachment=attachment_dict,
         )
 
@@ -281,7 +280,9 @@ class TodoistClient:
         """
         try:
             # Get tasks completed today
-            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today = datetime.now().replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ) - timedelta(days=2)
             tomorrow = today + timedelta(days=1)
 
             logger.info(f"Fetching completed tasks from {today} to {tomorrow}")

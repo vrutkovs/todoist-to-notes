@@ -4,6 +4,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -257,16 +258,14 @@ class ObsidianExporter:
         if comments and self.config.include_comments:
             content.append("## Comments")
             content.append("")
-
             for comment in comments:
-                # Format datetime without timezone
-                comment_datetime = comment.posted_at.replace("Z", "").replace("T", " ")
-                if "." in comment_datetime:
-                    comment_datetime = comment_datetime.split(".")[0]
-                content.append(f"### Comment - {comment_datetime}")
-                content.append("")
-                content.append(comment.content)
-                content.append("")
+                # Format datetime as \"1 Jan 14:50\"
+                # Example: \"2024-01-11T15:30:00Z\" -> \"11 Jan 15:30\"\n
+                dt_object = datetime.fromisoformat(
+                    comment.posted_at.replace("Z", "+00:00")
+                )
+                formatted_datetime = dt_object.strftime("%d %b %H:%M")
+                content.append(f"* {formatted_datetime} - {comment.content}")
 
         return "\n".join(content)
 

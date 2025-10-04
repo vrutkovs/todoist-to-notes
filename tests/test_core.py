@@ -59,7 +59,6 @@ class TestExportTasksInternal:
             labels=["test"],
             due=None,
             url="https://example.com/task/456",
-            comment_count=0,
             is_completed=False,
             created_at="2024-01-01T00:00:00Z",
             creator_id="user123",
@@ -82,7 +81,6 @@ class TestExportTasksInternal:
             labels=["done"],
             due=None,
             url="https://example.com/task/789",
-            comment_count=0,
             is_completed=True,
             created_at="2024-01-01T00:00:00Z",
             creator_id="user123",
@@ -170,7 +168,6 @@ class TestExportTasksInternal:
             labels=["test"],
             due=None,
             url="https://example.com/task/456",
-            comment_count=0,
             is_completed=True,  # This one is marked completed
             created_at="2024-01-01T00:00:00Z",
             creator_id="user123",
@@ -328,3 +325,98 @@ class TestExportTasksInternal:
         # Should still call get_completed_tasks to check for completed tasks
         mock_client.get_completed_tasks.assert_called_once_with(project_id=None)
         assert result == 0
+
+    def test_export_tasks_with_comments_ignores_comment_count(
+        self, mock_client, export_config, mock_project
+    ):
+        """Test that comments are fetched regardless of comment_count value."""
+        # Enable comments in export config
+        export_config.include_comments = True
+
+        # Create a task with comment_count = 0 (unreliable)
+        task_with_zero_comment_count = TodoistTask(
+            id="456",
+            content="Task with zero comment_count",
+            description="Test description",
+            project_id="123",
+            section_id=None,
+            parent_id=None,
+            order=1,
+            priority=3,
+            labels=["test"],
+            due=None,
+            url="https://example.com/task/456",
+            is_completed=False,
+            created_at="2024-01-01T00:00:00Z",
+            creator_id="user123",
+            assignee_id=None,
+            assigner_id=None,
+        )
+
+        # Mock comments that should be fetched despite comment_count=0
+        mock_comments = [
+            Mock(
+                id="comment1", content="First comment", posted_at="2024-01-01T10:00:00Z"
+            ),
+            Mock(
+                id="comment2",
+                content="Second comment",
+                posted_at="2024-01-01T11:00:00Z",
+            ),
+        ]
+
+        # Setup mocks
+        mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_tasks.return_value = [task_with_zero_comment_count]
+        mock_client.get_task_comments.return_value = mock_comments
+
+        # Mock the exporter
+        with patch("src.core.ObsidianExporter") as mock_exporter_class:
+            mock_exporter = Mock()
+            mock_exporter_class.return_value = mock_exporter
+
+            result = export_tasks_internal(
+                client=mock_client,
+                export_config=export_config,
+                include_completed=False,
+            )
+
+            # Verify that get_task_comments was called despite comment_count=0
+            mock_client.get_task_comments.assert_called_once_with("456")
+
+            # Verify task was exported with comments
+            mock_exporter.export_task.assert_called_once_with(
+                task_with_zero_comment_count, mock_project, mock_comments, []
+            )
+            assert result == 1
+
+    def test_export_tasks_comments_disabled(
+        self, mock_client, export_config, mock_project, mock_task
+    ):
+        """Test that comments are not fetched when disabled in config."""
+        # Comments are disabled by default in export_config
+        assert export_config.include_comments is False
+
+        # Setup mocks
+        mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_tasks.return_value = [mock_task]
+
+        # Mock the exporter
+        with patch("src.core.ObsidianExporter") as mock_exporter_class:
+            mock_exporter = Mock()
+            mock_exporter_class.return_value = mock_exporter
+
+            result = export_tasks_internal(
+                client=mock_client,
+                export_config=export_config,
+                include_completed=False,
+            )
+
+            # Verify that get_task_comments was NOT called
+            mock_client.get_task_comments.assert_not_called()
+
+            # Verify task was exported without comments (None)
+            mock_exporter.export_task.assert_called_once_with(
+                mock_task, mock_project, None, []
+            )
+            assert result == 1

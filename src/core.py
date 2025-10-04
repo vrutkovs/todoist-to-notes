@@ -104,9 +104,13 @@ def export_tasks_internal(
 
         # Get comments if enabled
         comments = None
-        if export_config.include_comments and task.comment_count > 0:
+        if export_config.include_comments:
             try:
                 comments = client.get_task_comments(task.id)
+                if comments:
+                    logger.info(
+                        f"Fetched {len(comments)} comments for task '{task.content}'"
+                    )
             except TodoistAPIError as e:
                 logger.warning(f"Failed to get comments for task '{task.content}': {e}")
 

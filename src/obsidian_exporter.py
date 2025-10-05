@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
-from .todoist_client import TodoistComment, TodoistProject, TodoistTask
+from .todoist_client import TodoistComment, TodoistProject, TodoistSection, TodoistTask
 
 logger = logging.getLogger(__name__)
 
@@ -158,12 +158,18 @@ class ObsidianExporter:
 
         return tags
 
-    def format_frontmatter(self, task: TodoistTask, project: TodoistProject) -> str:
+    def format_frontmatter(
+        self,
+        task: TodoistTask,
+        project: TodoistProject,
+        section: TodoistSection | None = None,
+    ) -> str:
         """Generate YAML frontmatter for a task.
 
         Args:
             task: The Todoist task
             project: The project the task belongs to
+            section: The section the task belongs to (optional)
 
         Returns:
             YAML frontmatter as string
@@ -175,6 +181,11 @@ class ObsidianExporter:
         frontmatter.append(f"todoist_id: {self.format_yaml_string(task.id)}")
         frontmatter.append(f"project: {self.format_yaml_string(project.name)}")
         frontmatter.append(f'project_id: "{project.id}"')
+
+        # Section
+        if section:
+            frontmatter.append(f"section: {self.format_yaml_string(section.name)}")
+            frontmatter.append(f'section_id: "{section.id}"')
         frontmatter.append(f'created: "{task.created_at}"')
 
         # Due date
@@ -214,6 +225,7 @@ class ObsidianExporter:
         project: TodoistProject,
         comments: list[TodoistComment] | None = None,
         child_tasks: list[TodoistTask] | None = None,
+        section: TodoistSection | None = None,
     ) -> str:
         """Format a task as markdown content.
 
@@ -222,6 +234,7 @@ class ObsidianExporter:
             project: The project the task belongs to
             comments: Optional list of comments
             child_tasks: Optional list of child tasks to include as checkboxes
+            section: The section the task belongs to (optional)
 
         Returns:
             Formatted markdown content
@@ -229,7 +242,7 @@ class ObsidianExporter:
         content = []
 
         # Add frontmatter
-        content.append(self.format_frontmatter(task, project))
+        content.append(self.format_frontmatter(task, project, section))
 
         # Task title
         status_icon = "✅" if task.is_completed else "⬜"
@@ -292,6 +305,7 @@ class ObsidianExporter:
         project: TodoistProject,
         comments: list[TodoistComment] | None = None,
         child_tasks: list[TodoistTask] | None = None,
+        section: TodoistSection | None = None,
     ) -> Path:
         """Export a single task as a markdown note.
 
@@ -300,6 +314,7 @@ class ObsidianExporter:
             project: The project the task belongs to
             comments: Optional comments for the task
             child_tasks: Optional list of child tasks to include as checkboxes
+            section: The section the task belongs to (optional)
 
         Returns:
             Path to the created note file
@@ -349,7 +364,9 @@ class ObsidianExporter:
                 logger.warning(f"Failed to read existing file {output_path}: {e}")
 
         # Generate new content
-        new_content = self.format_task_content(task, project, comments, child_tasks)
+        new_content = self.format_task_content(
+            task, project, comments, child_tasks, section
+        )
 
         # Combine with preserved user content
         final_content = new_content + existing_user_content

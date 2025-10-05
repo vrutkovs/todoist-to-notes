@@ -94,6 +94,7 @@ class TestExportTasksInternal:
         """Test basic task export without completed tasks."""
         # Setup mocks
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = [mock_task]
 
         # Mock the exporter
@@ -116,7 +117,7 @@ class TestExportTasksInternal:
 
             # Verify export
             mock_exporter.export_task.assert_called_once_with(
-                mock_task, mock_project, None, []
+                mock_task, mock_project, None, [], None
             )
             assert result == 1
 
@@ -126,6 +127,7 @@ class TestExportTasksInternal:
         """Test task export including completed tasks."""
         # Setup mocks
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = [mock_task]
         mock_client.get_completed_tasks.return_value = [mock_completed_task]
 
@@ -177,6 +179,7 @@ class TestExportTasksInternal:
 
         # Setup mocks - same task appears in both lists
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = [mock_task]
         mock_client.get_completed_tasks.return_value = [duplicate_task]
 
@@ -201,6 +204,7 @@ class TestExportTasksInternal:
         """Test task export with project filter and completed tasks."""
         # Setup mocks
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = [mock_task]
         mock_client.get_completed_tasks.return_value = [mock_completed_task]
 
@@ -230,6 +234,7 @@ class TestExportTasksInternal:
         """Test that export continues if fetching completed tasks fails."""
         # Setup mocks
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = [mock_task]
         mock_client.get_completed_tasks.side_effect = TodoistAPIError(
             "Failed to fetch completed tasks"
@@ -248,7 +253,7 @@ class TestExportTasksInternal:
 
             # Verify that regular task export still happened
             mock_exporter.export_task.assert_called_once_with(
-                mock_task, mock_project, None, []
+                mock_task, mock_project, None, [], None
             )
             assert result == 1
 
@@ -258,6 +263,7 @@ class TestExportTasksInternal:
         """Test task export by project name with completed tasks."""
         # Setup mocks
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = [mock_task]
         mock_client.get_completed_tasks.return_value = []
 
@@ -284,9 +290,10 @@ class TestExportTasksInternal:
     def test_export_tasks_only_completed_tasks(
         self, mock_client, export_config, mock_project, mock_completed_task
     ):
-        """Test export when only completed tasks are found."""
-        # Setup mocks - no regular tasks, only completed tasks
+        """Test export when only completed tasks are available."""
+        # Setup mocks
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = []
         mock_client.get_completed_tasks.return_value = [mock_completed_task]
 
@@ -303,7 +310,7 @@ class TestExportTasksInternal:
 
             # Should export the completed task
             mock_exporter.export_task.assert_called_once_with(
-                mock_completed_task, mock_project, None, []
+                mock_completed_task, mock_project, None, [], None
             )
             assert result == 1
 
@@ -313,6 +320,7 @@ class TestExportTasksInternal:
         """Test export when no tasks are found."""
         # Setup mocks
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = []
         mock_client.get_completed_tasks.return_value = []
 
@@ -367,6 +375,7 @@ class TestExportTasksInternal:
 
         # Setup mocks
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = [task_with_zero_comment_count]
         mock_client.get_task_comments.return_value = mock_comments
 
@@ -386,7 +395,7 @@ class TestExportTasksInternal:
 
             # Verify task was exported with comments
             mock_exporter.export_task.assert_called_once_with(
-                task_with_zero_comment_count, mock_project, mock_comments, []
+                task_with_zero_comment_count, mock_project, mock_comments, [], None
             )
             assert result == 1
 
@@ -399,6 +408,7 @@ class TestExportTasksInternal:
 
         # Setup mocks
         mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
         mock_client.get_tasks.return_value = [mock_task]
 
         # Mock the exporter
@@ -417,6 +427,60 @@ class TestExportTasksInternal:
 
             # Verify task was exported without comments (None)
             mock_exporter.export_task.assert_called_once_with(
-                mock_task, mock_project, None, []
+                mock_task, mock_project, None, [], None
+            )
+            assert result == 1
+
+    def test_export_tasks_with_section(self, mock_client, export_config, mock_project):
+        """Test task export with section information."""
+        from src.todoist_client import TodoistSection
+
+        # Create a mock section
+        mock_section = TodoistSection(
+            id="section_123", project_id="123", name="Important Tasks", order=1
+        )
+
+        # Create a task with section_id
+        task_with_section = TodoistTask(
+            id="456",
+            content="Test Task with Section",
+            description="Test description",
+            project_id="123",
+            section_id="section_123",
+            parent_id=None,
+            order=1,
+            priority=3,
+            labels=["test"],
+            due=None,
+            url="https://example.com/task/456",
+            is_completed=False,
+            created_at="2024-01-01T00:00:00Z",
+            creator_id="user123",
+            assignee_id=None,
+            assigner_id=None,
+        )
+
+        # Setup mocks
+        mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = [mock_section]
+        mock_client.get_tasks.return_value = [task_with_section]
+
+        # Mock the exporter
+        with patch("src.core.ObsidianExporter") as mock_exporter_class:
+            mock_exporter = Mock()
+            mock_exporter_class.return_value = mock_exporter
+
+            result = export_tasks_internal(
+                client=mock_client,
+                export_config=export_config,
+                include_completed=False,
+            )
+
+            # Verify calls
+            mock_client.get_sections.assert_called_once()
+
+            # Verify export with section
+            mock_exporter.export_task.assert_called_once_with(
+                task_with_section, mock_project, None, [], mock_section
             )
             assert result == 1

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from todoist_api_python.api import TodoistAPI
 from todoist_api_python.models import Comment as TodoistAPIComment
 from todoist_api_python.models import Project as TodoistAPIProject
+from todoist_api_python.models import Section as TodoistAPISection
 from todoist_api_python.models import Task as TodoistAPITask
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,25 @@ class TodoistProject(BaseModel):
             color=api_project.color,
             is_shared=api_project.is_shared,
             url=api_project.url,
+        )
+
+
+class TodoistSection(BaseModel):
+    """Represents a Todoist section."""
+
+    id: str
+    project_id: str
+    name: str
+    order: int
+
+    @classmethod
+    def from_api_section(cls, api_section: TodoistAPISection) -> "TodoistSection":
+        """Create TodoistSection from the API section object."""
+        return cls(
+            id=api_section.id,
+            project_id=api_section.project_id,
+            name=api_section.name,
+            order=api_section.order,
         )
 
 
@@ -166,6 +186,40 @@ class TodoistClient:
             raise TodoistAPIError(
                 f"Failed to initialize Todoist API client: {e}"
             ) from e
+
+    def get_sections(self, project_id: str | None = None) -> list[TodoistSection]:
+        """Fetch sections, optionally filtered by project.
+
+        Args:
+            project_id: Optional project ID to filter sections
+
+        Returns:
+            List of TodoistSection objects
+
+        Raises:
+            TodoistAPIError: If the API request fails
+        """
+        try:
+            params = {}
+            if project_id:
+                params["project_id"] = project_id
+
+            logger.info(f"Fetching sections from Todoist with params: {params}")
+
+            if project_id:
+                api_sections_paginator = self._api.get_sections(project_id=project_id)
+            else:
+                api_sections_paginator = self._api.get_sections()
+
+            # Convert paginator to list by iterating through all results
+            all_sections = []
+            for sections_page in api_sections_paginator:
+                for section in sections_page:
+                    all_sections.append(TodoistSection.from_api_section(section))
+            return all_sections
+        except Exception as e:
+            logger.error(f"Failed to fetch sections: {e}")
+            raise TodoistAPIError(f"Failed to fetch sections: {e}") from e
 
     def get_projects(self) -> list[TodoistProject]:
         """Fetch all projects.

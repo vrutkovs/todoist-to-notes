@@ -361,3 +361,46 @@ class TestObsidianExporter:
         parsed = yaml.safe_load(yaml_content)
         assert isinstance(parsed, dict)
         assert parsed["title"] == 'Read "The Great Gatsby" today'
+
+    def test_format_frontmatter_with_section(
+        self, exporter, sample_task, sample_project
+    ):
+        """Test formatting frontmatter with section information."""
+        from src.todoist_client import TodoistSection
+
+        # Create a mock section
+        section = TodoistSection(
+            id="section_123", project_id="123", name="Important Tasks", order=1
+        )
+
+        frontmatter = exporter.format_frontmatter(sample_task, sample_project, section)
+
+        assert 'section: "Important Tasks"' in frontmatter
+        assert 'section_id: "section_123"' in frontmatter
+
+    def test_format_frontmatter_without_section(
+        self, exporter, sample_task, sample_project
+    ):
+        """Test formatting frontmatter without section information."""
+        frontmatter = exporter.format_frontmatter(sample_task, sample_project)
+
+        assert "section:" not in frontmatter
+        assert "section_id:" not in frontmatter
+
+    def test_format_task_content_with_section(
+        self, exporter, sample_task, sample_project
+    ):
+        """Test formatting task content with section information."""
+        from src.todoist_client import TodoistSection
+
+        # Create a mock section
+        section = TodoistSection(
+            id="section_456", project_id="123", name="Development Tasks", order=2
+        )
+
+        content = exporter.format_task_content(
+            sample_task, sample_project, None, None, section
+        )
+
+        assert 'section: "Development Tasks"' in content
+        assert 'section_id: "section_456"' in content

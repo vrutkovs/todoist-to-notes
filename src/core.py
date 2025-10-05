@@ -40,6 +40,10 @@ def export_tasks_internal(
     projects = client.get_projects()
     projects_dict = {p.id: p for p in projects}
 
+    # Get sections
+    sections = client.get_sections()
+    sections_dict = {s.id: s for s in sections}
+
     # Resolve project name to ID if needed
     target_project_id = project_id
     if project_name and not project_id:
@@ -114,9 +118,12 @@ def export_tasks_internal(
             except TodoistAPIError as e:
                 logger.warning(f"Failed to get comments for task '{task.content}': {e}")
 
+        # Get section for this task
+        section = sections_dict.get(task.section_id) if task.section_id else None
+
         # Export the task with its child tasks
         try:
-            exporter.export_task(task, project, comments, child_tasks)
+            exporter.export_task(task, project, comments, child_tasks, section)
             exported_count += 1
         except Exception as e:
             logger.error(f"Failed to export task '{task.content}': {e}")

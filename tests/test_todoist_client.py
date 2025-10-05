@@ -9,6 +9,7 @@ from src.todoist_client import (
     TodoistClient,
     TodoistComment,
     TodoistProject,
+    TodoistSection,
     TodoistTask,
 )
 
@@ -69,6 +70,20 @@ class TestTodoistModels:
             task_data["priority"] = priority
             task = TodoistTask(**task_data)
             assert task.priority_text == expected_text
+
+    def test_todoist_section_creation(self):
+        """Test creating a TodoistSection from data."""
+        data = {
+            "id": "section_123",
+            "project_id": "123",
+            "name": "Important Tasks",
+            "order": 1,
+        }
+        section = TodoistSection(**data)
+        assert section.id == "section_123"
+        assert section.project_id == "123"
+        assert section.name == "Important Tasks"
+        assert section.order == 1
 
     def test_todoist_comment_creation(self):
         """Test creating a TodoistComment from data."""

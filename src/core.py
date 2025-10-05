@@ -79,6 +79,11 @@ def export_tasks_internal(
     child_tasks_by_parent: dict[str, list[TodoistTask]] = {}
 
     for task in tasks:
+        # Skip tasks that start with *
+        if task.content.startswith("*"):
+            logger.debug(f"Skipping task starting with *: {task.content}")
+            continue
+
         if task.parent_id:
             # This is a child task
             if task.parent_id not in child_tasks_by_parent:

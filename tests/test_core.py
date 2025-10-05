@@ -484,3 +484,336 @@ class TestExportTasksInternal:
                 task_with_section, mock_project, None, [], mock_section
             )
             assert result == 1
+
+    def test_export_tasks_ignore_asterisk_tasks(
+        self, mock_client, export_config, mock_project
+    ):
+        """Test that tasks starting with * are ignored."""
+        from src.todoist_client import TodoistTask
+
+        # Create tasks, some starting with *
+        normal_task = TodoistTask(
+            id="456",
+            content="Normal task",
+            description="Regular task",
+            project_id="123",
+            section_id=None,
+            parent_id=None,
+            order=1,
+            priority=1,
+            labels=[],
+            due=None,
+            url="https://example.com/task/456",
+            is_completed=False,
+            created_at="2024-01-01T00:00:00Z",
+            creator_id="user123",
+            assignee_id=None,
+            assigner_id=None,
+        )
+
+        asterisk_task = TodoistTask(
+            id="789",
+            content="*Ignored task",
+            description="This should be ignored",
+            project_id="123",
+            section_id=None,
+            parent_id=None,
+            order=2,
+            priority=1,
+            labels=[],
+            due=None,
+            url="https://example.com/task/789",
+            is_completed=False,
+            created_at="2024-01-01T00:00:00Z",
+            creator_id="user123",
+            assignee_id=None,
+            assigner_id=None,
+        )
+
+        # Setup mocks
+        mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
+        mock_client.get_tasks.return_value = [normal_task, asterisk_task]
+
+        # Mock the exporter
+        with patch("src.core.ObsidianExporter") as mock_exporter_class:
+            mock_exporter = Mock()
+            mock_exporter_class.return_value = mock_exporter
+
+            result = export_tasks_internal(
+                client=mock_client,
+                export_config=export_config,
+                include_completed=False,
+            )
+
+            # Should only export normal task, not asterisk task
+            mock_exporter.export_task.assert_called_once_with(
+                normal_task, mock_project, None, [], None
+            )
+            assert result == 1
+
+    def test_export_tasks_ignore_asterisk_child_tasks(
+        self, mock_client, export_config, mock_project
+    ):
+        """Test that child tasks starting with * are ignored."""
+        from src.todoist_client import TodoistTask
+
+        # Create parent task
+        parent_task = TodoistTask(
+            id="parent_123",
+            content="Parent task",
+            description="Parent task",
+            project_id="123",
+            section_id=None,
+            parent_id=None,
+            order=1,
+            priority=1,
+            labels=[],
+            due=None,
+            url="https://example.com/task/parent_123",
+            is_completed=False,
+            created_at="2024-01-01T00:00:00Z",
+            creator_id="user123",
+            assignee_id=None,
+            assigner_id=None,
+        )
+
+        # Create child tasks, one normal and one starting with *
+        normal_child = TodoistTask(
+            id="child_456",
+            content="Normal child task",
+            description="Regular child task",
+            project_id="123",
+            section_id=None,
+            parent_id="parent_123",
+            order=2,
+            priority=1,
+            labels=[],
+            due=None,
+            url="https://example.com/task/child_456",
+            is_completed=False,
+            created_at="2024-01-01T00:00:00Z",
+            creator_id="user123",
+            assignee_id=None,
+            assigner_id=None,
+        )
+
+        asterisk_child = TodoistTask(
+            id="child_789",
+            content="*Ignored child task",
+            description="This child should be ignored",
+            project_id="123",
+            section_id=None,
+            parent_id="parent_123",
+            order=3,
+            priority=1,
+            labels=[],
+            due=None,
+            url="https://example.com/task/child_789",
+            is_completed=False,
+            created_at="2024-01-01T00:00:00Z",
+            creator_id="user123",
+            assignee_id=None,
+            assigner_id=None,
+        )
+
+        # Setup mocks
+        mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
+        mock_client.get_tasks.return_value = [parent_task, normal_child, asterisk_child]
+
+        # Mock the exporter
+        with patch("src.core.ObsidianExporter") as mock_exporter_class:
+            mock_exporter = Mock()
+            mock_exporter_class.return_value = mock_exporter
+
+            result = export_tasks_internal(
+                client=mock_client,
+                export_config=export_config,
+                include_completed=False,
+            )
+
+            # Should export parent task with only the normal child task
+            mock_exporter.export_task.assert_called_once_with(
+                parent_task, mock_project, None, [normal_child], None
+            )
+            assert result == 1
+
+    def test_export_tasks_ignore_asterisk_parent_and_children(
+        self, mock_client, export_config, mock_project
+    ):
+        """Test that parent tasks starting with * and their children are ignored."""
+        from src.todoist_client import TodoistTask
+
+        # Create parent task starting with *
+        asterisk_parent = TodoistTask(
+            id="parent_asterisk",
+            content="*Ignored parent task",
+            description="This parent should be ignored",
+            project_id="123",
+            section_id=None,
+            parent_id=None,
+            order=1,
+            priority=1,
+            labels=[],
+            due=None,
+            url="https://example.com/task/parent_asterisk",
+            is_completed=False,
+            created_at="2024-01-01T00:00:00Z",
+            creator_id="user123",
+            assignee_id=None,
+            assigner_id=None,
+        )
+
+        # Create child task of the asterisk parent
+        child_of_asterisk = TodoistTask(
+            id="child_of_asterisk",
+            content="Child of ignored parent",
+            description="This child should also be ignored",
+            project_id="123",
+            section_id=None,
+            parent_id="parent_asterisk",
+            order=2,
+            priority=1,
+            labels=[],
+            due=None,
+            url="https://example.com/task/child_of_asterisk",
+            is_completed=False,
+            created_at="2024-01-01T00:00:00Z",
+            creator_id="user123",
+            assignee_id=None,
+            assigner_id=None,
+        )
+
+        # Setup mocks
+        mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
+        mock_client.get_tasks.return_value = [asterisk_parent, child_of_asterisk]
+
+        # Mock the exporter
+        with patch("src.core.ObsidianExporter") as mock_exporter_class:
+            mock_exporter = Mock()
+            mock_exporter_class.return_value = mock_exporter
+
+            result = export_tasks_internal(
+                client=mock_client,
+                export_config=export_config,
+                include_completed=False,
+            )
+
+            # Should not export anything since parent starts with *
+            mock_exporter.export_task.assert_not_called()
+            assert result == 0
+
+    def test_export_tasks_asterisk_edge_cases(
+        self, mock_client, export_config, mock_project
+    ):
+        """Test edge cases for asterisk filtering."""
+        from src.todoist_client import TodoistTask
+
+        # Test various edge cases
+        tasks = [
+            # Task with asterisk but not at the beginning - should be exported
+            TodoistTask(
+                id="edge1",
+                content="Task with * in the middle",
+                description="This should be exported",
+                project_id="123",
+                section_id=None,
+                parent_id=None,
+                order=1,
+                priority=1,
+                labels=[],
+                due=None,
+                url="https://example.com/task/edge1",
+                is_completed=False,
+                created_at="2024-01-01T00:00:00Z",
+                creator_id="user123",
+                assignee_id=None,
+                assigner_id=None,
+            ),
+            # Empty content task - should be exported (edge case)
+            TodoistTask(
+                id="edge2",
+                content="",
+                description="Empty content task",
+                project_id="123",
+                section_id=None,
+                parent_id=None,
+                order=2,
+                priority=1,
+                labels=[],
+                due=None,
+                url="https://example.com/task/edge2",
+                is_completed=False,
+                created_at="2024-01-01T00:00:00Z",
+                creator_id="user123",
+                assignee_id=None,
+                assigner_id=None,
+            ),
+            # Task starting with asterisk followed by space - should be ignored
+            TodoistTask(
+                id="edge3",
+                content="* Task with space after asterisk",
+                description="This should be ignored",
+                project_id="123",
+                section_id=None,
+                parent_id=None,
+                order=3,
+                priority=1,
+                labels=[],
+                due=None,
+                url="https://example.com/task/edge3",
+                is_completed=False,
+                created_at="2024-01-01T00:00:00Z",
+                creator_id="user123",
+                assignee_id=None,
+                assigner_id=None,
+            ),
+            # Task with only asterisk - should be ignored
+            TodoistTask(
+                id="edge4",
+                content="*",
+                description="Single asterisk",
+                project_id="123",
+                section_id=None,
+                parent_id=None,
+                order=4,
+                priority=1,
+                labels=[],
+                due=None,
+                url="https://example.com/task/edge4",
+                is_completed=False,
+                created_at="2024-01-01T00:00:00Z",
+                creator_id="user123",
+                assignee_id=None,
+                assigner_id=None,
+            ),
+        ]
+
+        # Setup mocks
+        mock_client.get_projects.return_value = [mock_project]
+        mock_client.get_sections.return_value = []
+        mock_client.get_tasks.return_value = tasks
+
+        # Mock the exporter
+        with patch("src.core.ObsidianExporter") as mock_exporter_class:
+            mock_exporter = Mock()
+            mock_exporter_class.return_value = mock_exporter
+
+            result = export_tasks_internal(
+                client=mock_client,
+                export_config=export_config,
+                include_completed=False,
+            )
+
+            # Should export only the first two tasks (edge1 and edge2)
+            # edge3 and edge4 should be ignored because they start with *
+            assert mock_exporter.export_task.call_count == 2
+
+            # Check that the correct tasks were exported
+            calls = mock_exporter.export_task.call_args_list
+            exported_task_ids = [call[0][0].id for call in calls]
+            assert "edge1" in exported_task_ids
+            assert "edge2" in exported_task_ids
+            assert result == 2
